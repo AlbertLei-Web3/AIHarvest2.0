@@ -6,7 +6,7 @@ interface Token {
   symbol: string;
   name: string;
   decimals: number;
-  logoURI?: string;
+  logo?: string;
 }
 
 interface Pool {
@@ -26,21 +26,21 @@ const MOCK_TOKENS: Token[] = [
     symbol: 'ETH',
     name: 'Ethereum',
     decimals: 18,
-    logoURI: '/images/tokens/eth.png'
+    logo: '/images/tokens/eth.png'
   },
   {
     address: '0x1111111111111111111111111111111111111111',
     symbol: 'AIH',
     name: 'AIHarvest Token',
     decimals: 18,
-    logoURI: '/images/tokens/aih.png'
+    logo: '/images/tokens/aih.png'
   },
   {
     address: '0x2222222222222222222222222222222222222222',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoURI: '/images/tokens/usdc.png'
+    logo: '/images/tokens/usdc.png'
   }
 ];
 
@@ -153,15 +153,15 @@ export const LiquidityInterface: React.FC = () => {
                 <div className="flex items-center mb-3">
                   <div className="flex -space-x-2 mr-3">
                     <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center z-10">
-                      {pool.token0.logoURI ? (
-                        <img src={pool.token0.logoURI} alt={pool.token0.symbol} className="w-6 h-6 rounded-full" />
+                      {pool.token0.logo ? (
+                        <img src={pool.token0.logo} alt={pool.token0.symbol} className="w-6 h-6 rounded-full" />
                       ) : (
                         <span className="text-sm font-bold">{pool.token0.symbol.charAt(0)}</span>
                       )}
                     </div>
                     <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                      {pool.token1.logoURI ? (
-                        <img src={pool.token1.logoURI} alt={pool.token1.symbol} className="w-6 h-6 rounded-full" />
+                      {pool.token1.logo ? (
+                        <img src={pool.token1.logo} alt={pool.token1.symbol} className="w-6 h-6 rounded-full" />
                       ) : (
                         <span className="text-sm font-bold">{pool.token1.symbol.charAt(0)}</span>
                       )}
@@ -209,15 +209,15 @@ export const LiquidityInterface: React.FC = () => {
               <div className="flex items-center mb-3">
                 <div className="flex -space-x-2 mr-3">
                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center z-10">
-                    {pool.token0.logoURI ? (
-                      <img src={pool.token0.logoURI} alt={pool.token0.symbol} className="w-6 h-6 rounded-full" />
+                    {pool.token0.logo ? (
+                      <img src={pool.token0.logo} alt={pool.token0.symbol} className="w-6 h-6 rounded-full" />
                     ) : (
                       <span className="text-sm font-bold">{pool.token0.symbol.charAt(0)}</span>
                     )}
                   </div>
                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                    {pool.token1.logoURI ? (
-                      <img src={pool.token1.logoURI} alt={pool.token1.symbol} className="w-6 h-6 rounded-full" />
+                    {pool.token1.logo ? (
+                      <img src={pool.token1.logo} alt={pool.token1.symbol} className="w-6 h-6 rounded-full" />
                     ) : (
                       <span className="text-sm font-bold">{pool.token1.symbol.charAt(0)}</span>
                     )}
@@ -450,15 +450,15 @@ export const LiquidityInterface: React.FC = () => {
           <div className="flex items-center mb-3">
             <div className="flex -space-x-2 mr-3">
               <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center z-10">
-                {selectedPool.token0.logoURI ? (
-                  <img src={selectedPool.token0.logoURI} alt={selectedPool.token0.symbol} className="w-6 h-6 rounded-full" />
+                {selectedPool.token0.logo ? (
+                  <img src={selectedPool.token0.logo} alt={selectedPool.token0.symbol} className="w-6 h-6 rounded-full" />
                 ) : (
                   <span className="text-sm font-bold">{selectedPool.token0.symbol.charAt(0)}</span>
                 )}
               </div>
               <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                {selectedPool.token1.logoURI ? (
-                  <img src={selectedPool.token1.logoURI} alt={selectedPool.token1.symbol} className="w-6 h-6 rounded-full" />
+                {selectedPool.token1.logo ? (
+                  <img src={selectedPool.token1.logo} alt={selectedPool.token1.symbol} className="w-6 h-6 rounded-full" />
                 ) : (
                   <span className="text-sm font-bold">{selectedPool.token1.symbol.charAt(0)}</span>
                 )}
@@ -495,8 +495,8 @@ export const LiquidityInterface: React.FC = () => {
           <div className="flex justify-between items-center mb-2">
             <div className="flex items-center">
               <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center mr-2">
-                {selectedPool.token0.logoURI ? (
-                  <img src={selectedPool.token0.logoURI} alt={selectedPool.token0.symbol} className="w-4 h-4 rounded-full" />
+                {selectedPool.token0.logo ? (
+                  <img src={selectedPool.token0.logo} alt={selectedPool.token0.symbol} className="w-4 h-4 rounded-full" />
                 ) : (
                   <span className="text-xs font-bold">{selectedPool.token0.symbol.charAt(0)}</span>
                 )}
@@ -510,8 +510,8 @@ export const LiquidityInterface: React.FC = () => {
           <div className="flex justify-between items-center">
             <div className="flex items-center">
               <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center mr-2">
-                {selectedPool.token1.logoURI ? (
-                  <img src={selectedPool.token1.logoURI} alt={selectedPool.token1.symbol} className="w-4 h-4 rounded-full" />
+                {selectedPool.token1.logo ? (
+                  <img src={selectedPool.token1.logo} alt={selectedPool.token1.symbol} className="w-4 h-4 rounded-full" />
                 ) : (
                   <span className="text-xs font-bold">{selectedPool.token1.symbol.charAt(0)}</span>
                 )}
@@ -567,8 +567,8 @@ export const LiquidityInterface: React.FC = () => {
                 onClick={() => handleTokenSelect(token)}
               >
                 <div className="w-8 h-8 mr-3 bg-gray-200 rounded-full flex items-center justify-center">
-                  {token.logoURI ? (
-                    <img src={token.logoURI} alt={token.symbol} className="w-6 h-6 rounded-full" />
+                  {token.logo ? (
+                    <img src={token.logo} alt={token.symbol} className="w-6 h-6 rounded-full" />
                   ) : (
                     <span className="text-sm font-bold">{token.symbol.charAt(0)}</span>
                   )}

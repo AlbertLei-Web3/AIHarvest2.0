@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
+import { FarmCard } from './FarmCard';
 
 interface Token {
   address: string;
   symbol: string;
   name: string;
   decimals: number;
-  logoURI?: string;
+  logo?: string;
 }
 
 interface FarmPool {
@@ -33,21 +34,21 @@ const MOCK_TOKENS: Token[] = [
     symbol: 'ETH',
     name: 'Ethereum',
     decimals: 18,
-    logoURI: '/images/tokens/eth.png'
+    logo: '/images/tokens/eth.png'
   },
   {
     address: '0x1111111111111111111111111111111111111111',
     symbol: 'AIH',
     name: 'AIHarvest Token',
     decimals: 18,
-    logoURI: '/images/tokens/aih.png'
+    logo: '/images/tokens/aih.png'
   },
   {
     address: '0x2222222222222222222222222222222222222222',
     symbol: 'USDC',
     name: 'USD Coin',
     decimals: 6,
-    logoURI: '/images/tokens/usdc.png'
+    logo: '/images/tokens/usdc.png'
   }
 ];
 
@@ -136,95 +137,50 @@ export const FarmInterface: React.FC = () => {
     console.log(`Harvesting ${pool.userPendingRewards} ${pool.rewardToken.symbol} from ${pool.name}`);
   };
 
+  // Mock deposit handler
+  const handleDeposit = (pool: FarmPool, amount: string) => {
+    console.log(`Depositing ${amount} ${pool.lpToken.symbol} to ${pool.name}`);
+    // Here you would call your deposit function from a hook
+  };
+
+  // Mock withdraw handler
+  const handleWithdraw = (pool: FarmPool, amount: string) => {
+    console.log(`Withdrawing ${amount} ${pool.lpToken.symbol} from ${pool.name}`);
+    // Here you would call your withdraw function from a hook
+  };
+
+  // Convert pool LP token to Token type
+  const getLpToken = (pool: FarmPool): Token => {
+    return {
+      address: pool.lpToken.address,
+      symbol: pool.lpToken.symbol,
+      name: `${pool.lpToken.token0.symbol}-${pool.lpToken.token1.symbol} LP`,
+      decimals: 18, // LP tokens typically have 18 decimals
+      logo: pool.lpToken.token0.logo // Use the first token's logo for simplicity
+    };
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6">
       <h2 className="text-xl font-semibold mb-6">Farm Pools</h2>
 
       <div className="space-y-6">
         {MOCK_FARMS.map((pool) => (
-          <div key={pool.id} className="bg-gray-50 rounded-lg p-6">
-            <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
-              <div className="flex items-center mb-4 lg:mb-0">
-                <div className="flex -space-x-2 mr-3">
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center z-10">
-                    {pool.lpToken.token0.logoURI ? (
-                      <img src={pool.lpToken.token0.logoURI} alt={pool.lpToken.token0.symbol} className="w-8 h-8 rounded-full" />
-                    ) : (
-                      <span className="text-sm font-bold">{pool.lpToken.token0.symbol.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
-                    {pool.lpToken.token1.logoURI ? (
-                      <img src={pool.lpToken.token1.logoURI} alt={pool.lpToken.token1.symbol} className="w-8 h-8 rounded-full" />
-                    ) : (
-                      <span className="text-sm font-bold">{pool.lpToken.token1.symbol.charAt(0)}</span>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <h3 className="font-medium text-lg">{pool.name}</h3>
-                  <p className="text-sm text-gray-500">Earn {pool.rewardToken.symbol}</p>
-                </div>
-              </div>
-              <div className="flex flex-col md:flex-row gap-3">
-                {parseFloat(pool.userStaked) > 0 && (
-                  <button 
-                    className="px-4 py-2 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg"
-                    onClick={() => handleHarvest(pool)}
-                    disabled={parseFloat(pool.userPendingRewards) <= 0}
-                  >
-                    Harvest {pool.userPendingRewards} {pool.rewardToken.symbol}
-                  </button>
-                )}
-                <button 
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
-                  onClick={() => openStakeModal(pool)}
-                >
-                  {parseFloat(pool.userStaked) > 0 ? 'Stake More' : 'Stake'}
-                </button>
-                {parseFloat(pool.userStaked) > 0 && (
-                  <button 
-                    className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg"
-                    onClick={() => openUnstakeModal(pool)}
-                  >
-                    Unstake
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-              <div className="bg-white p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">APR</p>
-                <p className="text-xl font-semibold text-green-600">{pool.apr}%</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Total Staked</p>
-                <p className="text-xl font-semibold">{pool.totalStaked} {pool.lpToken.symbol}</p>
-              </div>
-              <div className="bg-white p-4 rounded-lg">
-                <p className="text-sm text-gray-500 mb-1">Your Stake</p>
-                <p className="text-xl font-semibold">{pool.userStaked} {pool.lpToken.symbol}</p>
-              </div>
-            </div>
-
-            {parseFloat(pool.userStaked) > 0 && (
-              <div className="bg-white p-4 rounded-lg mt-4">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Pending Rewards</p>
-                    <p className="text-lg font-medium">{pool.userPendingRewards} {pool.rewardToken.symbol}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500 mb-1">Rewards Per Day</p>
-                    <p className="text-lg font-medium">
-                      {(parseFloat(pool.userStaked) / parseFloat(pool.totalStaked) * parseFloat(pool.rewardsPerDay)).toFixed(2)} {pool.rewardToken.symbol}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <FarmCard
+            key={pool.id}
+            farmAddress={pool.lpToken.address}
+            poolId={parseInt(pool.id.replace('0x', ''), 16)}
+            lpToken={getLpToken(pool)}
+            rewardToken={pool.rewardToken}
+            apr={pool.apr.toString()}
+            userStaked={pool.userStaked}
+            totalStaked={pool.totalStaked}
+            pendingRewards={pool.userPendingRewards}
+            onDeposit={(amount) => handleDeposit(pool, amount)}
+            onWithdraw={(amount) => handleWithdraw(pool, amount)}
+            onHarvest={() => handleHarvest(pool)}
+            lpBalance="100"
+          />
         ))}
 
         {MOCK_FARMS.length === 0 && (
