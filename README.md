@@ -1,6 +1,77 @@
 # AIHarvest 2.0
 
-AIHarvest is a DeFi platform that enables token swapping, liquidity provision, and yield farming.
+A decentralized platform for token swapping, liquidity provision, and yield farming.
+
+## Implementation Status
+
+### Smart Contracts
+- ✅ AIHToken - ERC20 token implementation
+- ✅ SimpleSwapRouter - DEX router for swapping tokens and managing liquidity pools
+- ✅ SimpleFarm - Farming contract for staking LP tokens to earn rewards
+
+### Frontend Integration
+- ✅ Contract ABIs defined and structured
+- ✅ Contract interaction hooks implemented
+  - useAIHToken - Interact with the AIH token contract
+  - useSimpleSwap - Interact with the swap router
+  - useSimpleFarm - Interact with the farming contract
+- ✅ Swap interface connected to contracts
+- ⏳ Liquidity interface connected to contracts
+- ⏳ Farm interface connected to contracts
+
+## Contract Integration
+
+The frontend integrates with smart contracts through custom React hooks that utilize wagmi/ethers.js. This approach allows for:
+
+1. **Abstracted Contract Interactions**: Components don't need to know the details of contract calls
+2. **Network Awareness**: Automatically uses the correct contract address based on the connected network
+3. **State Management**: Tracks loading, error, and success states for improved UX
+
+### Example Usage
+
+```tsx
+// In a component
+const { balance, approve, transfer } = useAIHToken();
+const { swap, addLiquidity, removeLiquidity } = useSimpleSwap();
+const { deposit, withdraw, harvest } = useSimpleFarm(poolId);
+
+// Execute a swap
+await swap(amountIn, amountOutMin, path);
+```
+
+## Development
+
+### Prerequisites
+- Node.js 18+
+- Hardhat for contract development
+- Metamask or another web3 wallet
+
+### Setup
+
+1. Clone the repository
+2. Install dependencies:
+   ```
+   npm install
+   ```
+3. Start the development server:
+   ```
+   npm run dev
+   ```
+
+### Architecture
+
+The project follows a layered architecture:
+- Smart contracts (On-chain)
+- Data indexing (TheGraph)
+- Backend services (Express.js)
+- Frontend application (Next.js)
+
+## Next Steps
+
+- Complete contract integration for liquidity and farming interfaces
+- Implement user positions tracking
+- Add transaction history
+- Develop analytics dashboard
 
 ## Core Smart Contracts
 

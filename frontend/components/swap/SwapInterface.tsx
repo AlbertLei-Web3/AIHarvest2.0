@@ -1,86 +1,148 @@
 import React, { useState, useEffect } from 'react';
-import { useAccount, useBalance } from 'wagmi';
+import { useAccount, useBalance, usePublicClient, useWalletClient } from 'wagmi';
 import { parseUnits, formatUnits } from 'ethers/lib/utils';
+import { BigNumber, ethers } from 'ethers';
+import { useAIHToken, useSimpleSwap } from '../../hooks';
+import { UI_CONSTANTS, DEFAULT_TOKEN_LIST } from '../../utils/constants';
+import { formatFromWei, calculatePriceImpact } from '../../utils/helpers';
 
 interface Token {
   address: string;
   symbol: string;
   name: string;
   decimals: number;
-  logoURI?: string;
+  logo?: string;
+  isNative?: boolean;
 }
 
-// Mock tokens for demonstration
-const MOCK_TOKENS: Token[] = [
-  {
-    address: '0x0000000000000000000000000000000000000000',
-    symbol: 'ETH',
-    name: 'Ethereum',
-    decimals: 18,
-    logoURI: '/images/tokens/eth.png'
-  },
-  {
-    address: '0x1111111111111111111111111111111111111111',
-    symbol: 'AIH',
-    name: 'AIHarvest Token',
-    decimals: 18,
-    logoURI: '/images/tokens/aih.png'
-  },
-  {
-    address: '0x2222222222222222222222222222222222222222',
-    symbol: 'USDC',
-    name: 'USD Coin',
-    decimals: 6,
-    logoURI: '/images/tokens/usdc.png'
-  }
-];
-
 export const SwapInterface: React.FC = () => {
-  const [tokenFrom, setTokenFrom] = useState<Token>(MOCK_TOKENS[0]);
-  const [tokenTo, setTokenTo] = useState<Token>(MOCK_TOKENS[1]);
+  // Use our hooks
+  const { address } = useAccount();
+  const { tokenAddress: aihTokenAddress } = useAIHToken();
+  const { 
+    swap, 
+    isSwapping, 
+    swapError,
+    getAmountOut,
+    getReserves,
+    getPair
+  } = useSimpleSwap();
+
+  // Local state
+  const [tokenFrom, setTokenFrom] = useState<Token>(DEFAULT_TOKEN_LIST[0]); // ETH
+  const [tokenTo, setTokenTo] = useState<Token | null>(null);
   const [amountFrom, setAmountFrom] = useState<string>('');
   const [amountTo, setAmountTo] = useState<string>('');
-  const [slippage, setSlippage] = useState<number>(0.5); // Default slippage tolerance
+  const [slippage, setSlippage] = useState<number>(UI_CONSTANTS.SLIPPAGE_TOLERANCE_DEFAULT);
   const [isSelectingToken, setIsSelectingToken] = useState<'from' | 'to' | null>(null);
+  const [pairAddress, setPairAddress] = useState<string | null>(null);
+  const [isCalculating, setIsCalculating] = useState<boolean>(false);
+  const [priceImpact, setPriceImpact] = useState<number>(0);
 
-  const { address } = useAccount();
-  const { data: balanceData } = useBalance({
+  // Get token balances
+  const { data: nativeBalance } = useBalance({
     address,
-    token: tokenFrom.address === '0x0000000000000000000000000000000000000000' ? undefined : tokenFrom.address as `0x${string}`,
+    enabled: !!address && tokenFrom?.isNative,
   });
+
+  const { data: tokenFromBalance } = useBalance({
+    address,
+    token: !tokenFrom?.isNative ? tokenFrom?.address as `0x${string}` : undefined,
+    enabled: !!address && !tokenFrom?.isNative,
+  });
+
+  // Set AIH token when available
+  useEffect(() => {
+    if (aihTokenAddress && !tokenTo) {
+      const aihToken = DEFAULT_TOKEN_LIST.find(t => t.symbol === 'AIH');
+      if (aihToken) {
+        const updatedToken = {...aihToken, address: aihTokenAddress};
+        setTokenTo(updatedToken);
+      }
+    }
+  }, [aihTokenAddress, tokenTo]);
+
+  // Get pair and reserves when tokens change
+  useEffect(() => {
+    const fetchPairData = async () => {
+      if (tokenFrom && tokenTo && tokenFrom.address !== tokenTo.address) {
+        try {
+          const pair = await getPair(tokenFrom.address, tokenTo.address);
+          setPairAddress(pair);
+        } catch (error) {
+          console.error('Error fetching pair:', error);
+          setPairAddress(null);
+        }
+      }
+    };
+
+    fetchPairData();
+  }, [tokenFrom, tokenTo, getPair]);
+
+  // Calculate output amount when input changes
+  useEffect(() => {
+    const calculateOutput = async () => {
+      if (!amountFrom || !tokenFrom || !tokenTo || !pairAddress) {
+        setAmountTo('');
+        setPriceImpact(0);
+        return;
+      }
+
+      setIsCalculating(true);
+
+      try {
+        // Parse input amount
+        const parsedAmount = parseUnits(amountFrom, tokenFrom.decimals);
+        
+        // Get reserves
+        const { reserveA, reserveB } = await getReserves(
+          pairAddress,
+          tokenFrom.address,
+          tokenTo.address
+        );
+        
+        // Calculate output
+        const amountOut = await getAmountOut(parsedAmount, reserveA, reserveB);
+        setAmountTo(formatUnits(amountOut, tokenTo.decimals));
+        
+        // Calculate price impact
+        const impact = calculatePriceImpact(
+          parseFloat(amountFrom),
+          parseFloat(formatUnits(amountOut, tokenTo.decimals)),
+          1, // Mock price for now
+          1  // Mock price for now
+        );
+        setPriceImpact(impact);
+      } catch (error) {
+        console.error('Error calculating output:', error);
+        setAmountTo('');
+        setPriceImpact(0);
+      } finally {
+        setIsCalculating(false);
+      }
+    };
+
+    calculateOutput();
+  }, [amountFrom, tokenFrom, tokenTo, pairAddress, getReserves, getAmountOut]);
 
   // Swap the tokens
   const handleSwapTokens = () => {
     const tempToken = tokenFrom;
-    setTokenFrom(tokenTo);
+    setTokenFrom(tokenTo as Token);
     setTokenTo(tempToken);
     setAmountFrom(amountTo);
     setAmountTo(amountFrom);
   };
 
-  // Calculate the estimated output amount (mock implementation)
-  const calculateOutputAmount = (inputAmount: string, tokenFromDecimals: number, tokenToDecimals: number) => {
-    if (!inputAmount || parseFloat(inputAmount) === 0) return '0';
-    
-    // Mock price ratio (in a real app, this would come from the smart contract)
-    const mockRatio = tokenFrom.symbol === 'ETH' && tokenTo.symbol === 'AIH' ? 1000 :
-                      tokenFrom.symbol === 'AIH' && tokenTo.symbol === 'ETH' ? 0.001 :
-                      tokenFrom.symbol === 'USDC' && tokenTo.symbol === 'AIH' ? 10 :
-                      tokenFrom.symbol === 'AIH' && tokenTo.symbol === 'USDC' ? 0.1 : 1;
-    
-    return (parseFloat(inputAmount) * mockRatio).toString();
-  };
-
   // Handle input change
   const handleFromAmountChange = (value: string) => {
     setAmountFrom(value);
-    setAmountTo(calculateOutputAmount(value, tokenFrom.decimals, tokenTo.decimals));
   };
 
   // Handle token selection
   const handleTokenSelect = (token: Token) => {
     if (isSelectingToken === 'from') {
-      if (token.address === tokenTo.address) {
+      if (tokenTo && token.address === tokenTo.address) {
         // If selected token is the same as destination, swap them
         setTokenFrom(tokenTo);
         setTokenTo(token);
@@ -97,7 +159,73 @@ export const SwapInterface: React.FC = () => {
       }
     }
     setIsSelectingToken(null);
-    handleFromAmountChange(amountFrom);
+  };
+
+  // Execute swap
+  const handleSwap = async () => {
+    if (!tokenFrom || !tokenTo || !amountFrom || !address) return;
+
+    try {
+      // Create the token path
+      const path = [tokenFrom.address, tokenTo.address];
+      
+      // Calculate minimum output amount with slippage
+      const amountOutMin = BigNumber.from(
+        parseUnits(amountTo, tokenTo.decimals)
+      )
+        .mul(Math.floor((100 - slippage) * 100))
+        .div(10000);
+      
+      // Execute swap
+      await swap(
+        parseUnits(amountFrom, tokenFrom.decimals),
+        amountOutMin,
+        path
+      );
+      
+      // Reset form
+      setAmountFrom('');
+      setAmountTo('');
+    } catch (error) {
+      console.error('Swap error:', error);
+    }
+  };
+
+  // Handle approval for ERC20 tokens before swapping
+  const handleApproveAndSwap = async () => {
+    if (!tokenFrom || !tokenTo || !amountFrom || !address) return;
+    
+    try {
+      // Only need approval for non-native tokens
+      if (!tokenFrom.isNative) {
+        // For AIH token, we can use our existing hook
+        if (tokenFrom.symbol === 'AIH') {
+          const aihToken = useAIHToken();
+          const { routerAddress } = useSimpleSwap();
+          
+          if (routerAddress) {
+            await aihToken.approve(
+              routerAddress,
+              parseUnits(amountFrom, tokenFrom.decimals)
+            );
+          }
+        } else {
+          // For other tokens, we'll need to implement a more generic approach
+          // For now, just log a message (this would be expanded in production)
+          console.log(`Approval for ${tokenFrom.symbol} would happen here`);
+          
+          // In a real implementation, we would:
+          // 1. Create a contract instance for the token
+          // 2. Check current allowance
+          // 3. Approve if necessary
+        }
+      }
+      
+      // Execute swap
+      await handleSwap();
+    } catch (error) {
+      console.error('Approval error:', error);
+    }
   };
 
   // Determine if swap button should be enabled
@@ -107,7 +235,9 @@ export const SwapInterface: React.FC = () => {
       parseFloat(amountFrom) === 0 || 
       !amountTo || 
       parseFloat(amountTo) === 0 ||
-      !address
+      !address ||
+      isSwapping ||
+      isCalculating
     );
   };
 
@@ -118,7 +248,11 @@ export const SwapInterface: React.FC = () => {
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm text-gray-600">From</span>
           <span className="text-sm text-gray-600">
-            Balance: {balanceData ? parseFloat(balanceData.formatted).toFixed(4) : '0'} {tokenFrom.symbol}
+            Balance: {
+              tokenFrom?.isNative 
+                ? nativeBalance ? parseFloat(nativeBalance.formatted).toFixed(4) : '0' 
+                : tokenFromBalance ? parseFloat(tokenFromBalance.formatted).toFixed(4) : '0'
+            } {tokenFrom?.symbol}
           </span>
         </div>
         <div className="flex items-center p-4 bg-gray-50 rounded-lg">
@@ -133,7 +267,7 @@ export const SwapInterface: React.FC = () => {
             className="ml-2 flex items-center bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg"
             onClick={() => setIsSelectingToken('from')}
           >
-            <span className="mr-1">{tokenFrom.symbol}</span>
+            <span className="mr-1">{tokenFrom?.symbol}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-4 w-4"
@@ -193,7 +327,7 @@ export const SwapInterface: React.FC = () => {
             className="ml-2 flex items-center bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-2 rounded-lg"
             onClick={() => setIsSelectingToken('to')}
           >
-            <span className="mr-1">{tokenTo.symbol}</span>
+            <span className="mr-1">{tokenTo?.symbol || 'Select'}</span>
             <svg
               xmlns="http://www.w3.org/2000/svg"
               className="h-4 w-4"
@@ -212,14 +346,24 @@ export const SwapInterface: React.FC = () => {
         </div>
       </div>
 
-      {/* Slippage Settings */}
+      {/* Price Impact and Slippage Settings */}
       <div className="mb-6">
+        {priceImpact > 0 && (
+          <div className={`p-2 rounded mb-2 text-sm ${
+            priceImpact < 1 ? 'bg-green-50 text-green-700' :
+            priceImpact < 3 ? 'bg-yellow-50 text-yellow-700' :
+            'bg-red-50 text-red-700'
+          }`}>
+            Price Impact: {priceImpact.toFixed(2)}%
+          </div>
+        )}
+        
         <div className="flex justify-between items-center mb-2">
           <span className="text-sm text-gray-600">Slippage Tolerance</span>
           <span className="text-sm text-blue-600">{slippage}%</span>
         </div>
         <div className="flex space-x-2">
-          {[0.1, 0.5, 1.0, 5.0].map((value) => (
+          {UI_CONSTANTS.SLIPPAGE_TOLERANCE_OPTIONS.map((value) => (
             <button
               key={value}
               className={`px-3 py-1 rounded-md text-sm ${
@@ -235,6 +379,13 @@ export const SwapInterface: React.FC = () => {
         </div>
       </div>
 
+      {/* Error display */}
+      {swapError && (
+        <div className="p-3 mb-4 bg-red-50 text-red-600 rounded-lg text-sm">
+          {swapError.message}
+        </div>
+      )}
+
       {/* Swap Button */}
       <button
         className={`w-full py-3 px-4 rounded-lg text-white font-medium ${
@@ -243,8 +394,9 @@ export const SwapInterface: React.FC = () => {
             : 'bg-blue-600 hover:bg-blue-700'
         }`}
         disabled={isSwapDisabled()}
+        onClick={handleApproveAndSwap}
       >
-        {!address ? 'Connect Wallet' : isSwapDisabled() ? 'Enter an amount' : 'Swap'}
+        {isSwapping ? 'Swapping...' : !address ? 'Connect Wallet' : !tokenTo ? 'Select Tokens' : isSwapDisabled() ? 'Enter an amount' : 'Swap'}
       </button>
 
       {/* Token Selection Modal */}
@@ -271,25 +423,32 @@ export const SwapInterface: React.FC = () => {
               </button>
             </div>
             <div className="p-4">
-              {MOCK_TOKENS.map((token) => (
-                <button
-                  key={token.address}
-                  className="flex items-center w-full p-3 hover:bg-gray-50 rounded-lg mb-2"
-                  onClick={() => handleTokenSelect(token)}
-                >
-                  <div className="w-8 h-8 mr-3 bg-gray-200 rounded-full flex items-center justify-center">
-                    {token.logoURI ? (
-                      <img src={token.logoURI} alt={token.symbol} className="w-6 h-6 rounded-full" />
-                    ) : (
-                      <span className="text-sm font-bold">{token.symbol.charAt(0)}</span>
-                    )}
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium">{token.symbol}</div>
-                    <div className="text-sm text-gray-500">{token.name}</div>
-                  </div>
-                </button>
-              ))}
+              {DEFAULT_TOKEN_LIST.map((token) => {
+                // Update AIH token address dynamically
+                const tokenToDisplay = token.symbol === 'AIH' && aihTokenAddress 
+                  ? {...token, address: aihTokenAddress} 
+                  : token;
+                
+                return (
+                  <button
+                    key={tokenToDisplay.address}
+                    className="flex items-center w-full p-3 hover:bg-gray-50 rounded-lg mb-2"
+                    onClick={() => handleTokenSelect(tokenToDisplay)}
+                  >
+                    <div className="w-8 h-8 mr-3 bg-gray-200 rounded-full flex items-center justify-center">
+                      {tokenToDisplay.logo ? (
+                        <img src={tokenToDisplay.logo} alt={tokenToDisplay.symbol} className="w-6 h-6 rounded-full" />
+                      ) : (
+                        <span className="text-sm font-bold">{tokenToDisplay.symbol.charAt(0)}</span>
+                      )}
+                    </div>
+                    <div className="text-left">
+                      <div className="font-medium">{tokenToDisplay.symbol}</div>
+                      <div className="text-sm text-gray-500">{tokenToDisplay.name}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
