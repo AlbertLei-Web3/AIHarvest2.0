@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # MongoDB service
+  mongodb:
+    image: mongo:6.0
+    container_name: aiharvest-mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=aiharvest
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_PASSWORD}
+    networks:
+      - aiharvest-network
+
+  # Redis service
+  redis:
+    image: redis:7.0-alpine
+    container_name: aiharvest-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - aiharvest-network
+
+  # Backend service
+  backend:
+    image: aiharvest/backend:latest
+    container_name: aiharvest-backend
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/aiharvest
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - PORT=3001
+      - JWT_SECRET=${JWT_SECRET}
+      - SUBGRAPH_ENDPOINT=${SUBGRAPH_ENDPOINT}
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - aiharvest-network
+
+  # Nginx proxy
+  nginx:
+    image: nginx:1.23-alpine
+    container_name: aiharvest-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    depends_on:
+      - backend
+    networks:
+      - aiharvest-network
+
+  # Certbot for SSL
+  certbot:
+    image: certbot/certbot
+    container_name: aiharvest-certbot
+    volumes:
+      - ./nginx/certbot/conf:/etc/letsencrypt
+      - ./nginx/certbot/www:/var/www/certbot
+    depends_on:
+      - nginx
+
+networks:
+  aiharvest-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data: 

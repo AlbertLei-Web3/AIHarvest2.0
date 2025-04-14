@@ -1,0 +1,28 @@
+{
+  "name": "aiharvest",
+  "version": "1.0.0",
+  "description": "AIHarvest 2.0 - DeFi Platform for token swapping, liquidity provision, and yield farming",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "contracts"
+  ],
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm run dev",
+    "test": "cd contracts && npx hardhat test",
+    "compile": "cd contracts && npx hardhat compile",
+    "deploy:contracts": "cd contracts && npx hardhat run scripts/deploy.js",
+    "deploy:subgraph": "cd subgraph && npm run deploy"
+  },
+  "keywords": [
+    "defi",
+    "ethereum",
+    "blockchain",
+    "web3",
+    "aiharvest"
+  ],
+  "author": "",
+  "license": "MIT"
+} 

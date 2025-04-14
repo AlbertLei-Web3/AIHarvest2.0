@@ -1,0 +1,111 @@
+version: '3.8'
+
+services:
+  # MongoDB service
+  mongodb:
+    image: mongo:6.0
+    container_name: aiharvest-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=aiharvest
+    networks:
+      - aiharvest-network
+
+  # Redis service
+  redis:
+    image: redis:7.0-alpine
+    container_name: aiharvest-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aiharvest-network
+
+  # The Graph service
+  graph-node:
+    image: graphprotocol/graph-node:latest
+    container_name: aiharvest-graph-node
+    ports:
+      - "8000:8000" # GraphQL HTTP API
+      - "8001:8001" # GraphQL WebSocket API
+      - "8020:8020" # JSON-RPC admin API
+    depends_on:
+      - ipfs
+      - postgres
+    environment:
+      - ethereum=development:http://host.docker.internal:8545
+      - ipfs=ipfs:5001
+      - postgres_host=postgres
+      - postgres_user=graph-node
+      - postgres_pass=let-me-in
+      - postgres_db=graph-node
+      - RUST_LOG=info
+      - ETHEREUM_POLLING_INTERVAL=1000
+    networks:
+      - aiharvest-network
+
+  # IPFS service for The Graph
+  ipfs:
+    image: ipfs/go-ipfs:v0.18.0
+    container_name: aiharvest-ipfs
+    ports:
+      - "5001:5001" # API
+    volumes:
+      - ipfs_data:/data/ipfs
+    networks:
+      - aiharvest-network
+
+  # Postgres service for The Graph
+  postgres:
+    image: postgres:14
+    container_name: aiharvest-postgres
+    ports:
+      - "5432:5432"
+    command: ["postgres", "-cshared_preload_libraries=pg_stat_statements"]
+    environment:
+      - POSTGRES_USER=graph-node
+      - POSTGRES_PASSWORD=let-me-in
+      - POSTGRES_DB=graph-node
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aiharvest-network
+
+  # Backend service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: aiharvest-backend
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - MONGODB_URI=mongodb://mongodb:27017/aiharvest
+      - REDIS_URL=redis://redis:6379
+      - PORT=3001
+      - JWT_SECRET=dev-secret-key
+      - SUBGRAPH_ENDPOINT=http://graph-node:8000/subgraphs/name/aiharvest
+    depends_on:
+      - mongodb
+      - redis
+      - graph-node
+    networks:
+      - aiharvest-network
+
+networks:
+  aiharvest-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  redis_data:
+  ipfs_data:
+  postgres_data: 

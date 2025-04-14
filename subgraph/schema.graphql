@@ -1,0 +1,78 @@
+type Token @entity {
+  id: ID!
+  symbol: String!
+  name: String!
+  decimals: Int!
+  totalSupply: BigInt!
+  volume: BigDecimal!
+  txCount: BigInt!
+}
+
+type Pair @entity {
+  id: ID!
+  token0: Token!
+  token1: Token!
+  reserve0: BigDecimal!
+  reserve1: BigDecimal!
+  totalSupply: BigDecimal!
+  volumeToken0: BigDecimal!
+  volumeToken1: BigDecimal!
+  volumeUSD: BigDecimal!
+  createdAtTimestamp: BigInt!
+  createdAtBlockNumber: BigInt!
+}
+
+type Swap @entity {
+  id: ID!
+  pair: Pair!
+  sender: Bytes!
+  amount0In: BigDecimal!
+  amount1In: BigDecimal!
+  amount0Out: BigDecimal!
+  amount1Out: BigDecimal!
+  to: Bytes!
+  timestamp: BigInt!
+  transaction: Transaction!
+}
+
+type Farm @entity {
+  id: ID!
+  pair: Pair!
+  stakedAmount: BigDecimal!
+  rewardRate: BigDecimal!
+  rewardPerTokenStored: BigDecimal!
+  lastUpdateTime: BigInt!
+  totalRewardsDistributed: BigDecimal!
+  stakerCount: BigInt!
+}
+
+type Stake @entity {
+  id: ID!
+  user: User!
+  farm: Farm!
+  amount: BigDecimal!
+  rewards: BigDecimal!
+  enteredAt: BigInt!
+  exitedAt: BigInt
+}
+
+type User @entity {
+  id: ID!
+  stakes: [Stake!]! @derivedFrom(field: "user")
+  swaps: [Swap!]! @derivedFrom(field: "sender")
+  liquidityPositions: [LiquidityPosition!]! @derivedFrom(field: "user")
+}
+
+type LiquidityPosition @entity {
+  id: ID!
+  user: User!
+  pair: Pair!
+  liquidityTokenBalance: BigDecimal!
+}
+
+type Transaction @entity {
+  id: ID!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  swaps: [Swap!]! @derivedFrom(field: "transaction")
+} 

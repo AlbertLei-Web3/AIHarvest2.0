@@ -1,0 +1,81 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: AIHToken
+    network: mainnet
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with actual contract address
+      abi: AIHToken
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Token
+      abis:
+        - name: AIHToken
+          file: ../contracts/artifacts/contracts/AIHToken.sol/AIHToken.json
+      eventHandlers:
+        - event: Transfer(indexed address,indexed address,uint256)
+          handler: handleTransfer
+      file: ./mappings/aih-token.ts
+  - kind: ethereum
+    name: SimpleSwapRouter
+    network: mainnet
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with actual contract address
+      abi: SimpleSwapRouter
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Pair
+        - Swap
+        - Token
+        - Transaction
+      abis:
+        - name: SimpleSwapRouter
+          file: ../contracts/artifacts/contracts/SimpleSwapRouter.sol/SimpleSwapRouter.json
+        - name: AIHToken
+          file: ../contracts/artifacts/contracts/AIHToken.sol/AIHToken.json
+      eventHandlers:
+        - event: PairCreated(indexed address,indexed address,address,uint256)
+          handler: handlePairCreated
+        - event: Swap(indexed address,uint256,uint256,uint256,uint256,address)
+          handler: handleSwap
+        - event: Mint(indexed address,uint256,uint256)
+          handler: handleMint
+        - event: Burn(indexed address,uint256,uint256,address)
+          handler: handleBurn
+      file: ./mappings/swap-router.ts
+  - kind: ethereum
+    name: SimpleFarm
+    network: mainnet
+    source:
+      address: "0x0000000000000000000000000000000000000000" # Replace with actual contract address
+      abi: SimpleFarm
+      startBlock: 0
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Farm
+        - Stake
+        - User
+      abis:
+        - name: SimpleFarm
+          file: ../contracts/artifacts/contracts/SimpleFarm.sol/SimpleFarm.json
+      eventHandlers:
+        - event: Deposit(indexed address,indexed uint256,uint256)
+          handler: handleDeposit
+        - event: Withdraw(indexed address,indexed uint256,uint256)
+          handler: handleWithdraw
+        - event: RewardPaid(indexed address,uint256)
+          handler: handleRewardPaid
+      file: ./mappings/farm.ts 
