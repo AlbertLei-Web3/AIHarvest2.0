@@ -2,6 +2,28 @@
 
 AIHarvest is a DeFi platform that enables token swapping, liquidity provision, and yield farming.
 
+## Core Smart Contracts
+
+We have implemented the three core smart contracts as specified in the project foundation document:
+
+1. **AIHToken**: ERC20 token with minting, burning, and vesting capabilities
+   - Community allocation for token distribution
+   - Team tokens with vesting
+   - Ecosystem fund with vesting
+   - Farm allocation for rewards
+
+2. **SimpleSwapRouter**: DEX router for token swapping and liquidity provision
+   - Create token pairs
+   - Add and remove liquidity
+   - Swap tokens with fee mechanism
+   - AMM based on constant product formula (x*y=k)
+
+3. **SimpleFarm**: LP token staking with AIH token rewards
+   - Multiple pools for different LP tokens
+   - Flexible reward allocation
+   - Time-based reward distribution
+   - Emergency withdrawal option
+
 ## Architecture
 
 The architecture consists of four main layers:
