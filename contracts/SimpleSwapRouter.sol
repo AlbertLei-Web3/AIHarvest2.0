@@ -5,7 +5,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./interfaces/IERC20.sol";
 
 /**
  * @title SimpleSwapRouter
@@ -52,10 +51,13 @@ contract SimpleSwapRouter is Ownable {
     /**
      * @dev Constructor sets the fee collector address and AIH token
      */
-    constructor(address _aihToken) Ownable(msg.sender) {
+    constructor(address _aihToken) Ownable() {
         require(_aihToken != address(0), "AIH token cannot be zero address");
         aihToken = _aihToken;
         feeCollector = msg.sender;
+        
+        // Transfer ownership
+        transferOwnership(msg.sender);
     }
 
     /**
@@ -91,7 +93,7 @@ contract SimpleSwapRouter is Ownable {
      * @param tokenB The second token address
      * @return pair The address of the pair (computed deterministically)
      */
-    function createPair(address tokenA, address tokenB) external returns (address pair) {
+    function createPair(address tokenA, address tokenB) public returns (address pair) {
         require(tokenA != tokenB, "IDENTICAL_ADDRESSES");
         require(tokenA != address(0) && tokenB != address(0), "ZERO_ADDRESS");
         require(getPair[tokenA][tokenB] == address(0), "PAIR_EXISTS");

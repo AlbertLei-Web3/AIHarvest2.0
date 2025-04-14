@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./AIHToken.sol";
 
 /**
@@ -61,11 +61,14 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @dev Constructor
      * @param _aihToken The AIH token address
      */
-    constructor(address _aihToken) Ownable(msg.sender) {
+    constructor(address _aihToken) Ownable() {
         require(_aihToken != address(0), "AIH token cannot be zero address");
         aihToken = AIHToken(_aihToken);
         startTime = block.timestamp;
         aihPerSecond = 100000000000000000; // 0.1 AIH per second (about 8640 AIH per day)
+        
+        // Transfer ownership
+        transferOwnership(msg.sender);
     }
 
     /**
@@ -81,7 +84,7 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _lpToken Address of the LP token contract
      * @param _withUpdate Flag to call massUpdatePools
      */
-    function add(uint256 _allocPoint, IERC20 _lpToken, bool _withUpdate) external onlyOwner {
+    function add(uint256 _allocPoint, address _lpToken, bool _withUpdate) external onlyOwner {
         if (_withUpdate) {
             massUpdatePools();
         }
@@ -90,14 +93,14 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         totalAllocPoint += _allocPoint;
         
         poolInfo.push(PoolInfo({
-            lpToken: _lpToken,
+            lpToken: IERC20(_lpToken),
             allocPoint: _allocPoint,
             lastRewardTime: lastRewardTime,
             accAIHPerShare: 0,
             totalStaked: 0
         }));
         
-        emit PoolAdded(poolInfo.length - 1, address(_lpToken), _allocPoint);
+        emit PoolAdded(poolInfo.length - 1, _lpToken, _allocPoint);
     }
 
     /**
@@ -312,31 +315,27 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Get pool info for a specific pool
+     * @dev Get pool information
      * @param _pid Pool ID
      * @return lpToken LP token address
      * @return allocPoint Allocation points
      * @return lastRewardTime Last reward time
      * @return accAIHPerShare Accumulated AIH per share
-     * @return totalStaked Total LP tokens staked
+     * @return totalStaked Total staked LP tokens
      */
-    function getPoolInfo(uint256 _pid) 
-        external 
-        view 
-        returns (
-            address lpToken, 
-            uint256 allocPoint, 
-            uint256 lastRewardTime, 
-            uint256 accAIHPerShare, 
-            uint256 totalStaked
-        ) 
-    {
+    function getPoolInfo(uint256 _pid) external view returns (
+        IERC20 lpToken,
+        uint256 allocPoint,
+        uint256 lastRewardTime,
+        uint256 accAIHPerShare,
+        uint256 totalStaked
+    ) {
         PoolInfo storage pool = poolInfo[_pid];
         return (
-            address(pool.lpToken), 
-            pool.allocPoint, 
-            pool.lastRewardTime, 
-            pool.accAIHPerShare, 
+            pool.lpToken,
+            pool.allocPoint,
+            pool.lastRewardTime,
+            pool.accAIHPerShare,
             pool.totalStaked
         );
     }

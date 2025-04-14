@@ -42,7 +42,7 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
      */
     constructor(address _teamWallet, address _ecosystemWallet) 
         ERC20("AIHarvest Token", "AIH") 
-        Ownable(msg.sender)
+        Ownable()
     {
         require(_teamWallet != address(0), "Team wallet cannot be zero address");
         require(_ecosystemWallet != address(0), "Ecosystem wallet cannot be zero address");
@@ -53,6 +53,9 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         
         // Mint initial community tokens to the owner for distribution
         _mint(msg.sender, COMMUNITY_ALLOCATION);
+        
+        // Transfer ownership
+        transferOwnership(msg.sender);
     }
     
     /**
@@ -120,8 +123,8 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
     /**
      * @dev Hook that is called before any transfer of tokens.
      */
-    function _update(address from, address to, uint256 value) internal override {
-        super._update(from, to, value);
+    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
+        super._beforeTokenTransfer(from, to, amount);
         
         // Ensure max supply is not exceeded on mint
         if (from == address(0)) {

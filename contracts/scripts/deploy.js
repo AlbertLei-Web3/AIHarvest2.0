@@ -52,8 +52,14 @@ async function main() {
     deploymentTime: new Date().toISOString()
   };
   
+  // Update the path to save in the contracts directory
+  const deploymentDir = "../deployments";
+  if (!fs.existsSync(deploymentDir)) {
+    fs.mkdirSync(deploymentDir, { recursive: true });
+  }
+  
   fs.writeFileSync(
-    "deployments/" + hre.network.name + "_addresses.json",
+    deploymentDir + "/" + hre.network.name + "_addresses.json",
     JSON.stringify(addresses, null, 2)
   );
   console.log("Deployment addresses saved to: deployments/" + hre.network.name + "_addresses.json");

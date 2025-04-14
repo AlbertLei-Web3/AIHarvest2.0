@@ -1,8 +1,11 @@
 /**
  * @type import('hardhat/config').HardhatUserConfig
  */
-require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
+
+// Use compatible plugins
+require("@nomiclabs/hardhat-ethers");
+require("@nomicfoundation/hardhat-chai-matchers");
 
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000000";
 const INFURA_API_KEY = process.env.INFURA_API_KEY || "";
@@ -15,7 +18,8 @@ module.exports = {
       optimizer: {
         enabled: true,
         runs: 200
-      }
+      },
+      viaIR: true
     }
   },
   networks: {
@@ -42,7 +46,7 @@ module.exports = {
     apiKey: ETHERSCAN_API_KEY
   },
   paths: {
-    sources: "./contracts",
+    sources: "./",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts"
