@@ -9,6 +9,7 @@ import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
 import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '../components/layout/Layout';
+import { ToastProvider } from '../contexts/ToastContext';
 
 // Configure chains and providers
 const { chains, publicClient, webSocketPublicClient } = configureChains(
@@ -49,9 +50,11 @@ function MyApp({ Component, pageProps }: AppProps) {
   return (
     <WagmiConfig config={config}>
       <QueryClientProvider client={queryClient}>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
+        <ToastProvider>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </ToastProvider>
       </QueryClientProvider>
     </WagmiConfig>
   );

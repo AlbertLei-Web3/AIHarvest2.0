@@ -1,5 +1,5 @@
-import { useContractCall } from './useContractCall';
-import { useContractTransaction } from './useContractTransaction';
+import { useContractCall } from './core/useContractCall';
+import { useContractTransaction } from './core/useContractTransaction';
 import { useAccount, useNetwork } from 'wagmi';
 import { SimpleFarmABI } from '../utils/abis';
 import { CONTRACT_ADDRESSES } from '../utils/constants';

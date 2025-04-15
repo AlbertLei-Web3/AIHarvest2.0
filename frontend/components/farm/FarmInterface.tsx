@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAccount } from 'wagmi';
 import { FarmCard } from './FarmCard';
+import { useToast } from '../../contexts/ToastContext';
 
 interface Token {
   address: string;
@@ -26,6 +27,9 @@ interface FarmPool {
   rewardsPerDay: string;
   userPendingRewards: string;
 }
+
+// Action types for modal
+type PoolAction = 'stake' | 'unstake';
 
 // Mock tokens for demonstration
 const MOCK_TOKENS: Token[] = [
@@ -90,63 +94,65 @@ const MOCK_FARMS: FarmPool[] = [
 
 export const FarmInterface: React.FC = () => {
   const [activePool, setActivePool] = useState<FarmPool | null>(null);
-  const [stakeAmount, setStakeAmount] = useState<string>('');
-  const [unstakeAmount, setUnstakeAmount] = useState<string>('');
-  const [isStakeModalOpen, setIsStakeModalOpen] = useState<boolean>(false);
-  const [isUnstakeModalOpen, setIsUnstakeModalOpen] = useState<boolean>(false);
+  const [activeAction, setActiveAction] = useState<PoolAction | null>(null);
+  const [actionAmount, setActionAmount] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
 
   const { address } = useAccount();
+  const { showToast } = useToast();
 
-  // Open stake modal for a pool
-  const openStakeModal = (pool: FarmPool) => {
-    setActivePool(pool);
-    setStakeAmount('');
-    setIsStakeModalOpen(true);
+  // Unified method to handle pool actions
+  const handlePoolAction = (
+    pool: FarmPool, 
+    action: PoolAction,
+    amount?: string
+  ) => {
+    if (amount) {
+      // Execute the action with amount
+      try {
+        if (action === 'stake') {
+          // Here would be the actual staking logic with real contract call
+          console.log(`Staking ${amount} ${pool.lpToken.symbol} in ${pool.name}`);
+          showToast(`Successfully staked ${amount} ${pool.lpToken.symbol}`, 'success');
+        } else {
+          // Here would be the actual unstaking logic with real contract call
+          console.log(`Unstaking ${amount} ${pool.lpToken.symbol} from ${pool.name}`);
+          showToast(`Successfully unstaked ${amount} ${pool.lpToken.symbol}`, 'success');
+        }
+        closeModal();
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        console.error(`${action} error:`, error);
+        showToast(errorMessage, 'error');
+      }
+    } else {
+      // Open modal for the action
+      setActivePool(pool);
+      setActiveAction(action);
+      setActionAmount('');
+      setIsModalOpen(true);
+    }
   };
 
-  // Open unstake modal for a pool
-  const openUnstakeModal = (pool: FarmPool) => {
-    setActivePool(pool);
-    setUnstakeAmount('');
-    setIsUnstakeModalOpen(true);
+  // Handle harvest rewards
+  const handleHarvest = async (pool: FarmPool) => {
+    try {
+      // Here would be the actual harvesting logic with real contract call
+      console.log(`Harvesting ${pool.userPendingRewards} ${pool.rewardToken.symbol} from ${pool.name}`);
+      showToast(`Successfully harvested ${pool.userPendingRewards} ${pool.rewardToken.symbol}`, 'success');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      console.error('Harvest error:', error);
+      showToast(errorMessage, 'error');
+    }
   };
 
-  // Close modals
-  const closeModals = () => {
-    setIsStakeModalOpen(false);
-    setIsUnstakeModalOpen(false);
-  };
-
-  // Handle stake
-  const handleStake = () => {
-    // Here would be the actual staking logic
-    console.log(`Staking ${stakeAmount} of ${activePool?.lpToken.symbol}`);
-    closeModals();
-  };
-
-  // Handle unstake
-  const handleUnstake = () => {
-    // Here would be the actual unstaking logic
-    console.log(`Unstaking ${unstakeAmount} of ${activePool?.lpToken.symbol}`);
-    closeModals();
-  };
-
-  // Handle harvesting rewards
-  const handleHarvest = (pool: FarmPool) => {
-    // Here would be the actual harvesting logic
-    console.log(`Harvesting ${pool.userPendingRewards} ${pool.rewardToken.symbol} from ${pool.name}`);
-  };
-
-  // Mock deposit handler
-  const handleDeposit = (pool: FarmPool, amount: string) => {
-    console.log(`Depositing ${amount} ${pool.lpToken.symbol} to ${pool.name}`);
-    // Here you would call your deposit function from a hook
-  };
-
-  // Mock withdraw handler
-  const handleWithdraw = (pool: FarmPool, amount: string) => {
-    console.log(`Withdrawing ${amount} ${pool.lpToken.symbol} from ${pool.name}`);
-    // Here you would call your withdraw function from a hook
+  // Close modal
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setActivePool(null);
+    setActiveAction(null);
+    setActionAmount('');
   };
 
   // Convert pool LP token to Token type
@@ -176,8 +182,8 @@ export const FarmInterface: React.FC = () => {
             userStaked={pool.userStaked}
             totalStaked={pool.totalStaked}
             pendingRewards={pool.userPendingRewards}
-            onDeposit={(amount) => handleDeposit(pool, amount)}
-            onWithdraw={(amount) => handleWithdraw(pool, amount)}
+            onDeposit={(amount) => handlePoolAction(pool, 'stake', amount)}
+            onWithdraw={(amount) => handlePoolAction(pool, 'unstake', amount)}
             onHarvest={() => handleHarvest(pool)}
             lpBalance="100"
           />
@@ -190,13 +196,15 @@ export const FarmInterface: React.FC = () => {
         )}
       </div>
 
-      {/* Stake Modal */}
-      {isStakeModalOpen && activePool && (
+      {/* Unified Action Modal */}
+      {isModalOpen && activePool && activeAction && (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
           <div className="bg-white rounded-lg w-96 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-medium">Stake LP Tokens</h3>
-              <button onClick={closeModals}>
+              <h3 className="text-lg font-medium">
+                {activeAction === 'stake' ? 'Stake' : 'Unstake'} LP Tokens
+              </h3>
+              <button onClick={closeModal}>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-6 w-6 text-gray-500 hover:text-gray-700"
@@ -216,9 +224,13 @@ export const FarmInterface: React.FC = () => {
             <div className="p-4">
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Amount to Stake</span>
                   <span className="text-sm text-gray-600">
-                    Balance: 100 {activePool.lpToken.symbol}
+                    Amount to {activeAction === 'stake' ? 'Stake' : 'Unstake'}
+                  </span>
+                  <span className="text-sm text-gray-600">
+                    {activeAction === 'stake' 
+                      ? `Balance: 100 ${activePool.lpToken.symbol}`
+                      : `Staked: ${activePool.userStaked} ${activePool.lpToken.symbol}`}
                   </span>
                 </div>
                 <div className="flex items-center">
@@ -226,107 +238,52 @@ export const FarmInterface: React.FC = () => {
                     type="number"
                     className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="0.0"
-                    value={stakeAmount}
-                    onChange={(e) => setStakeAmount(e.target.value)}
+                    value={actionAmount}
+                    onChange={(e) => setActionAmount(e.target.value)}
                   />
                   <button
                     className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded text-sm"
-                    onClick={() => setStakeAmount('100')}
+                    onClick={() => setActionAmount(activeAction === 'stake' ? '100' : activePool.userStaked)}
                   >
                     MAX
                   </button>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <p className="text-sm text-gray-600 mb-1">You will receive</p>
-                <p className="font-medium">
-                  {stakeAmount ? 
-                    `${(parseFloat(stakeAmount) / parseFloat(activePool.totalStaked) * parseFloat(activePool.rewardsPerDay)).toFixed(4)} ${activePool.rewardToken.symbol} per day` : 
-                    '0 rewards per day'}
-                </p>
-              </div>
+              {activeAction === 'stake' && (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-600 mb-1">You will receive</p>
+                  <p className="font-medium">
+                    {actionAmount ? 
+                      `${(parseFloat(actionAmount) / parseFloat(activePool.totalStaked) * parseFloat(activePool.rewardsPerDay)).toFixed(4)} ${activePool.rewardToken.symbol} per day` : 
+                      '0 rewards per day'}
+                  </p>
+                </div>
+              )}
+
+              {activeAction === 'unstake' && (
+                <div className="mb-4 p-3 bg-yellow-50 text-yellow-700 rounded-lg">
+                  <p className="text-sm">
+                    You will also harvest {activePool.userPendingRewards} {activePool.rewardToken.symbol} rewards when unstaking.
+                  </p>
+                </div>
+              )}
 
               <button
                 className={`w-full py-3 px-4 rounded-lg text-white font-medium ${
-                  !stakeAmount || parseFloat(stakeAmount) <= 0
+                  !actionAmount || parseFloat(actionAmount) <= 0 || 
+                  (activeAction === 'unstake' && parseFloat(actionAmount) > parseFloat(activePool.userStaked))
                     ? 'bg-gray-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700'
                 }`}
-                disabled={!stakeAmount || parseFloat(stakeAmount) <= 0}
-                onClick={handleStake}
+                disabled={
+                  !actionAmount || 
+                  parseFloat(actionAmount) <= 0 ||
+                  (activeAction === 'unstake' && parseFloat(actionAmount) > parseFloat(activePool.userStaked))
+                }
+                onClick={() => handlePoolAction(activePool, activeAction, actionAmount)}
               >
-                Stake
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Unstake Modal */}
-      {isUnstakeModalOpen && activePool && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-          <div className="bg-white rounded-lg w-96 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-4 border-b">
-              <h3 className="text-lg font-medium">Unstake LP Tokens</h3>
-              <button onClick={closeModals}>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-6 w-6 text-gray-500 hover:text-gray-700"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="p-4">
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-sm text-gray-600">Amount to Unstake</span>
-                  <span className="text-sm text-gray-600">
-                    Staked: {activePool.userStaked} {activePool.lpToken.symbol}
-                  </span>
-                </div>
-                <div className="flex items-center">
-                  <input
-                    type="number"
-                    className="w-full p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="0.0"
-                    value={unstakeAmount}
-                    onChange={(e) => setUnstakeAmount(e.target.value)}
-                  />
-                  <button
-                    className="ml-2 px-2 py-1 bg-blue-100 text-blue-600 rounded text-sm"
-                    onClick={() => setUnstakeAmount(activePool.userStaked)}
-                  >
-                    MAX
-                  </button>
-                </div>
-              </div>
-
-              <div className="mb-4 p-3 bg-yellow-50 text-yellow-700 rounded-lg">
-                <p className="text-sm">
-                  You will also harvest {activePool.userPendingRewards} {activePool.rewardToken.symbol} rewards when unstaking.
-                </p>
-              </div>
-
-              <button
-                className={`w-full py-3 px-4 rounded-lg text-white font-medium ${
-                  !unstakeAmount || parseFloat(unstakeAmount) <= 0 || parseFloat(unstakeAmount) > parseFloat(activePool.userStaked)
-                    ? 'bg-gray-400 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-                disabled={!unstakeAmount || parseFloat(unstakeAmount) <= 0 || parseFloat(unstakeAmount) > parseFloat(activePool.userStaked)}
-                onClick={handleUnstake}
-              >
-                Unstake
+                {activeAction === 'stake' ? 'Stake' : 'Unstake'}
               </button>
             </div>
           </div>

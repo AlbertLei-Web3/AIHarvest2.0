@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAccount, useContractWrite, usePrepareContractWrite } from 'wagmi';
 import { erc20ABI } from 'wagmi';
 import { parseUnits } from 'viem';
@@ -10,6 +10,7 @@ export const useTokenApproval = (tokenAddress: string, spenderAddress: string) =
   const { address } = useAccount();
   const [isApproving, setIsApproving] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvalSuccess, setApprovalSuccess] = useState<boolean>(false);
 
   // Track the amount to approve
   const [amountToApprove, setAmountToApprove] = useState<bigint | null>(null);
@@ -24,41 +25,59 @@ export const useTokenApproval = (tokenAddress: string, spenderAddress: string) =
   });
 
   // Contract write function
-  const { write: approveWrite, isLoading: isWriteLoading } = useContractWrite(config);
+  const { write: approveWrite, isLoading: isWriteLoading, isSuccess, error: writeError } = useContractWrite(config);
+
+  // Use useEffect to trigger the approval when amountToApprove changes
+  useEffect(() => {
+    if (amountToApprove && approveWrite) {
+      approveWrite();
+    }
+  }, [amountToApprove, approveWrite]);
+
+  // Handle approval success and error
+  useEffect(() => {
+    if (isSuccess) {
+      setApprovalSuccess(true);
+      setIsApproving(false);
+    }
+    
+    if (writeError) {
+      setApprovalError(writeError.message);
+      setIsApproving(false);
+    }
+  }, [isSuccess, writeError]);
 
   /**
    * Approve tokens for a spender
    * @param amount Amount to approve as a string
-   * @returns Promise resolving to transaction hash
+   * @returns Promise resolving to transaction result
    */
   const approve = async (amount: string) => {
     setIsApproving(true);
     setApprovalError(null);
+    setApprovalSuccess(false);
     
     try {
       // Convert amount to BigInt with appropriate decimals
       // Note: In production code, you should get the token's decimals
       const amountInWei = parseUnits(amount, 18);
       
-      // Set the amount to approve, which will update the config
+      // Set the amount to approve, which will trigger the useEffect
       setAmountToApprove(amountInWei);
       
-      // Wait a bit for the config to update
-      setTimeout(() => {
-        if (approveWrite) {
-          approveWrite();
-        } else {
-          throw new Error('Approval not available');
-        }
-      }, 100);
-      
-      return "Transaction sent";
+      return {
+        success: true,
+        message: "Approval initiated"
+      };
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during approval';
       console.error('Approval error:', error);
-      setApprovalError(error instanceof Error ? error.message : 'Unknown error during approval');
-      throw error;
-    } finally {
-      setIsApproving(false);
+      setApprovalError(errorMessage);
+      
+      return {
+        success: false,
+        message: errorMessage
+      };
     }
   };
 
@@ -77,5 +96,10 @@ export const useTokenApproval = (tokenAddress: string, spenderAddress: string) =
     isApproved,
     isApproving: isApproving || isWriteLoading,
     approvalError,
+    approvalSuccess,
+    resetApprovalState: () => {
+      setApprovalError(null);
+      setApprovalSuccess(false);
+    }
   };
 }; 
