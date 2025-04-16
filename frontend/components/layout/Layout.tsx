@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { Header } from './Header';
+import { Header, LanguageProvider } from './Header';
 import { Footer } from './Footer';
 
 interface LayoutProps {
@@ -8,10 +8,12 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header />
-      <div className="flex-grow">{children}</div>
-      <Footer />
-    </div>
+    <LanguageProvider>
+      <div className="min-h-screen flex flex-col bg-gradient-to-b from-dark-default via-dark-light to-dark-lighter text-white">
+        <Header />
+        <div className="flex-grow">{children}</div>
+        <Footer />
+      </div>
+    </LanguageProvider>
   );
 }; 

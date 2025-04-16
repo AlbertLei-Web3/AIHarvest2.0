@@ -1,63 +1,35 @@
-import React from 'react';
-import '../styles/globals.css';
+import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
-import { WagmiConfig, createConfig, configureChains } from 'wagmi';
-import { hardhat, sepolia, mainnet } from 'wagmi/chains';
-import { publicProvider } from 'wagmi/providers/public';
-import { MetaMaskConnector } from 'wagmi/connectors/metaMask';
-import { WalletConnectConnector } from 'wagmi/connectors/walletConnect';
-import { CoinbaseWalletConnector } from 'wagmi/connectors/coinbaseWallet';
+import { Layout } from '@/components/layout/Layout';
+import { createConfig, configureChains } from 'wagmi';
+import { sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Layout } from '../components/layout/Layout';
-import { ToastProvider } from '../contexts/ToastContext';
+import { http } from 'viem';
+import { WagmiConfig } from 'wagmi';
+import { publicProvider } from 'wagmi/providers/public';
 
-// Configure chains and providers
-const { chains, publicClient, webSocketPublicClient } = configureChains(
-  [
-    hardhat,
-    sepolia,
-    mainnet,
-  ],
+// Configure chains & providers
+const { chains, publicClient } = configureChains(
+  [sepolia],
   [publicProvider()]
 );
 
-// Set up wagmi config with connectors
 const config = createConfig({
   autoConnect: true,
-  connectors: [
-    new MetaMaskConnector({ chains }),
-    new WalletConnectConnector({
-      chains,
-      options: {
-        projectId: process.env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID || '',
-      },
-    }),
-    new CoinbaseWalletConnector({
-      chains,
-      options: {
-        appName: 'AIHarvest DeFi Platform',
-      },
-    }),
-  ],
   publicClient,
-  webSocketPublicClient,
 });
 
-// Create a React Query client
+// Create a client
 const queryClient = new QueryClient();
 
-function MyApp({ Component, pageProps }: AppProps) {
+export default function App({ Component, pageProps }: AppProps) {
   return (
     <WagmiConfig config={config}>
       <QueryClientProvider client={queryClient}>
-        <ToastProvider>
-          <Layout>
-            <Component {...pageProps} />
-          </Layout>
-        </ToastProvider>
+        <Layout>
+          <Component {...pageProps} />
+        </Layout>
       </QueryClientProvider>
     </WagmiConfig>
   );
-}
-
-export default MyApp; 
+} 

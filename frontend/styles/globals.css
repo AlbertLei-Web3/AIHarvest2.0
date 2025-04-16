@@ -2,39 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom global styles */
-html,
-body {
-  padding: 0;
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen,
-    Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-/* Custom loader animation */
-.loader {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-left-color: #3b82f6;
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% {
-    transform: rotate(0deg);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 26, 26, 46;
+    --background-mid-rgb: 22, 33, 62;
+    --background-end-rgb: 15, 52, 96;
   }
-  100% {
-    transform: rotate(360deg);
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-mid-rgb)),
+      rgb(var(--background-end-rgb))
+    )
+    fixed;
+}
+
+@layer components {
+  .gradient-text {
+    @apply bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text;
+  }
+
+  .gradient-button {
+    @apply bg-gradient-to-r from-primary to-secondary text-white font-medium px-5 py-2.5 rounded-lg hover:from-secondary hover:to-primary transition-all duration-300 shadow-md hover:shadow-lg;
+  }
+
+  .card {
+    @apply bg-white dark:bg-dark-light rounded-xl p-6 shadow-lg border border-gray-200 dark:border-primary/20 mb-6;
+  }
+
+  .input-wrapper {
+    @apply mb-4;
+  }
+
+  .input-field {
+    @apply w-full bg-transparent outline-none;
+  }
+
+  .token-selector {
+    @apply flex items-center space-x-2 bg-gray-100 dark:bg-dark-default rounded-lg px-3 py-2 hover:bg-gray-200 dark:hover:bg-dark-light transition cursor-pointer;
+  }
+
+  .btn-swap {
+    @apply w-10 h-10 bg-white dark:bg-dark-lighter rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all transform hover:rotate-180 duration-300 border border-gray-200 dark:border-primary/20;
+  }
+
+  .btn-primary {
+    @apply w-full py-3 bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white rounded-lg font-medium transition-all duration-300;
+  }
+
+  .btn-secondary {
+    @apply w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all duration-300;
   }
 } 

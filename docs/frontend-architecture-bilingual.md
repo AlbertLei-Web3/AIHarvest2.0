@@ -60,34 +60,75 @@ frontend/
 ### 布局组件
 
 - **Layout**: Wraps all pages with Header and Footer
-- **Header**: Navigation bar with links and wallet connection
-- **Footer**: Links to resources, products, and community
+- **Header**: Navigation bar with links and wallet connection, includes language selector (EN/中文)
+- **Footer**: Links to resources, products, and community with bilingual support
 
 - **Layout**: 用页眉和页脚包装所有页面
-- **Header**: 带有链接和钱包连接的导航栏
-- **Footer**: 资源、产品和社区链接
+- **Header**: 带有链接和钱包连接的导航栏，包括语言选择器（EN/中文）
+- **Footer**: 资源、产品和社区链接，支持双语
 
 ### Feature Components
 ### 功能组件
 
-- **SwapInterface**: Interface for selecting tokens and executing swaps
-- **LiquidityInterface**: Interface for managing liquidity positions
-- **FarmInterface**: Interface for staking LP tokens and harvesting rewards
+- **SwapInterface**: Interface for selecting tokens and executing swaps with price impact calculation
+- **LiquidityInterface**: Interface for managing liquidity positions, adding and removing liquidity
+- **FarmInterface**: Interface for staking LP tokens, harvesting rewards, and tracking APR
 - **WalletConnect**: Component for connecting and managing wallet state
-- **DashboardStats**: Statistics display for the platform overview
+- **DashboardStats**: Statistics display for the platform overview including TVL and rewards
 
-- **SwapInterface**: 用于选择代币和执行交换的界面
-- **LiquidityInterface**: 用于管理流动性头寸的界面
-- **FarmInterface**: 用于质押LP代币和收获奖励的界面
+- **SwapInterface**: 用于选择代币和执行交换的界面，具有价格影响计算功能
+- **LiquidityInterface**: 用于管理流动性头寸、添加和删除流动性的界面
+- **FarmInterface**: 用于质押LP代币、收获奖励和跟踪APR的界面
 - **WalletConnect**: 用于连接和管理钱包状态的组件
-- **DashboardStats**: 平台概览的统计数据显示
+- **DashboardStats**: 平台概览的统计数据显示，包括TVL和奖励
 
 ### Page Structure
 ### 页面结构
 
-The application follows a standard layout with consistent Header and Footer components across all pages. The main content area changes based on the current route.
+The application follows a standard layout with consistent Header and Footer components across all pages. The main content area changes based on the current route. All pages support bilingual functionality through the language context provider.
 
-应用程序遵循标准布局，在所有页面上使用一致的Header和Footer组件。主要内容区域根据当前路由进行变化。
+应用程序遵循标准布局，在所有页面上使用一致的Header和Footer组件。主要内容区域根据当前路由进行变化。所有页面通过语言上下文提供程序支持双语功能。
+
+#### Implemented Pages
+#### 已实现页面
+
+1. **Swap Page (swap.tsx)**
+   - Token selection for trading pairs
+   - Price impact calculation
+   - Slippage settings
+   - Exchange rate display
+
+1. **交换页面 (swap.tsx)**
+   - 交易对的代币选择
+   - 价格影响计算
+   - 滑点设置
+   - 汇率显示
+
+2. **Liquidity Page (liquidity.tsx)**
+   - Add liquidity to token pairs
+   - View and manage existing liquidity positions
+   - LP token information display
+   - Pool share calculation
+
+2. **流动性页面 (liquidity.tsx)**
+   - 向代币对添加流动性
+   - 查看和管理现有流动性头寸
+   - LP代币信息显示
+   - 池份额计算
+
+3. **Farm Page (farm.tsx)**
+   - Overview of farming statistics
+   - Stake LP tokens in multiple farm pools
+   - Track and harvest pending rewards
+   - Withdraw staked tokens
+   - APR display for each farm
+
+3. **农场页面 (farm.tsx)**
+   - 农场统计概览
+   - 在多个农场池中质押LP代币
+   - 跟踪和收获待领取奖励
+   - 提取已质押代币
+   - 显示每个农场的APR
 
 ### User Authentication
 ### 用户认证
@@ -95,6 +136,23 @@ The application follows a standard layout with consistent Header and Footer comp
 Wallet connection is handled through the `WalletConnect` component, which supports multiple wallet providers (MetaMask, WalletConnect, Coinbase Wallet).
 
 钱包连接通过`WalletConnect`组件处理，该组件支持多种钱包提供商（MetaMask、WalletConnect、Coinbase Wallet）。
+
+### Multilingual Support
+### 多语言支持
+
+The application implements full bilingual support (English and Chinese) through a language context provider in the Header component. Key features include:
+
+应用程序通过Header组件中的语言上下文提供程序实现完整的双语支持（英文和中文）。主要特点包括：
+
+- Language toggle in the header
+- Translation functions for page-specific text
+- Consistent language state across the application
+- Translated UI elements for all user interactions
+
+- 页眉中的语言切换
+- 页面特定文本的翻译函数
+- 整个应用程序中一致的语言状态
+- 所有用户交互的翻译UI元素
 
 ### Core Application Flow
 ### 核心应用流程
@@ -115,31 +173,39 @@ Following the user paths defined in the top-level design document:
    - The Swap page provides an interface for exchanging tokens
    - Users can select token pairs, enter amounts, and execute swaps
    - Price impact and slippage settings can be adjusted
+   - Exchange rate information is displayed
 
 2. **代币交换**
    - Swap页面提供了交换代币的界面
    - 用户可以选择代币对，输入金额，并执行交换
    - 可以调整价格影响和滑点设置
+   - 显示汇率信息
 
 3. **Liquidity Provision**
    - The Liquidity page allows users to add liquidity to token pairs
    - Users receive LP tokens representing their share of the pool
    - LP token balances and pool information is displayed
+   - Users can view and manage their existing liquidity positions
 
 3. **流动性提供**
    - Liquidity页面允许用户向代币对添加流动性
    - 用户接收代表其池份额的LP代币
    - 显示LP代币余额和池信息
+   - 用户可以查看和管理其现有的流动性头寸
 
 4. **Yield Farming**
    - The Farm page allows users to stake LP tokens in farm pools
    - Users can view pending rewards and harvest them
    - APR information is displayed for each pool
+   - Stats like TVL and daily rewards are shown
+   - Users can withdraw their staked tokens
 
 4. **收益耕作**
    - Farm页面允许用户在农场池中质押LP代币
    - 用户可以查看待领取的奖励并收获它们
    - 为每个池显示APR信息
+   - 显示TVL和每日奖励等统计数据
+   - 用户可以提取其质押的代币
 
 ## Data Flow
 ## 数据流
@@ -175,15 +241,15 @@ The frontend interacts with blockchain and backend services through:
 ## Responsive Design
 ## 响应式设计
 
-The UI is fully responsive, adapting to various screen sizes:
-- Mobile-first approach with appropriate breakpoints
-- Simplified interface on smaller screens
-- Full-featured dashboard on larger screens
+All components are designed to be fully responsive across various device sizes:
+- Desktop and large screens (>1024px)
+- Tablets (768px-1024px)
+- Mobile devices (<768px)
 
-UI完全响应式，适应各种屏幕尺寸：
-- 移动优先方法，具有适当的断点
-- 在较小屏幕上简化界面
-- 在较大屏幕上提供全功能仪表板
+所有组件都设计为在各种设备尺寸上完全响应：
+- 桌面和大屏幕 (>1024px)
+- 平板电脑 (768px-1024px)
+- 移动设备 (<768px)
 
 ## Performance Optimizations
 ## 性能优化
@@ -192,11 +258,13 @@ UI完全响应式，适应各种屏幕尺寸：
 - Component lazy loading for optimal chunk splitting
 - Memoization of expensive calculations
 - Optimistic UI updates for better perceived performance
+- Limited re-renders using React.memo and useCallback
 
 - 为非动态页面生成静态页面
 - 组件懒加载以实现最佳代码分块
 - 昂贵计算的记忆化
 - 乐观的UI更新以提高感知性能
+- 使用React.memo和useCallback限制重新渲染
 
 ## Security Considerations
 ## 安全考虑
@@ -205,11 +273,13 @@ UI完全响应式，适应各种屏幕尺寸：
 - Proper validation of all user inputs
 - Security warnings for high-risk operations
 - Transaction confirmation modals with detailed information
+- Protected routes for authenticated features
 
 - 前端代码中不存储私钥或敏感信息
 - 对所有用户输入进行适当验证
 - 对高风险操作提供安全警告
 - 具有详细信息的交易确认模态框
+- 已认证功能的受保护路由
 
 ---
 
@@ -224,12 +294,14 @@ When adding new components:
 2. Use TypeScript interfaces for prop typing
 3. Break complex components into smaller, reusable parts
 4. Include appropriate test files
+5. Ensure bilingual support through translation functions
 
 添加新组件时：
 1. 遵循现有的目录结构
 2. 使用TypeScript接口进行prop类型定义
 3. 将复杂组件分解为更小的、可重用的部分
 4. 包含适当的测试文件
+5. 通过翻译函数确保双语支持
 
 ### State Management
 ### 状态管理
@@ -237,10 +309,12 @@ When adding new components:
 - Use React Context for global state when necessary
 - Prefer local component state for UI-specific states
 - Use custom hooks to encapsulate complex logic
+- Implement proper loading and error states
 
 - 在必要时使用React Context进行全局状态管理
 - 对UI特定状态优先使用本地组件状态
 - 使用自定义钩子封装复杂逻辑
+- 实现适当的加载和错误状态
 
 ### Working with Contracts
 ### 与合约交互
@@ -249,8 +323,90 @@ When adding new components:
 - Use typed hooks for contract interactions
 - Include proper error handling for failed transactions
 - Display loading states during pending transactions
+- Implement proper transaction confirmation flows
 
 - 所有合约ABI应存储在一个中央位置
 - 使用类型化钩子进行合约交互
 - 对失败的交易包含适当的错误处理
-- 在待处理交易期间显示加载状态 
+- 在待处理交易期间显示加载状态
+- 实现适当的交易确认流程
+
+### Bilingual Support
+### 双语支持
+
+- Use the language context for accessing current language setting
+- Create separate translation objects for each page or component
+- Use typed translation keys for better type checking
+- Implement a consistent function naming pattern (t, st, ft, etc.)
+- Test UI in both languages to ensure proper layout handling
+
+- 使用语言上下文访问当前语言设置
+- 为每个页面或组件创建单独的翻译对象
+- 使用类型化的翻译键以实现更好的类型检查
+- 实现一致的函数命名模式（t, st, ft等）
+- 在两种语言中测试UI以确保适当的布局处理
+
+---
+
+## Development Guidelines
+## 开发指南
+
+### Adding New Components
+### 添加新组件
+
+When adding new components:
+1. Follow the existing directory structure
+2. Use TypeScript interfaces for prop typing
+3. Break complex components into smaller, reusable parts
+4. Include appropriate test files
+5. Ensure bilingual support through translation functions
+
+添加新组件时：
+1. 遵循现有的目录结构
+2. 使用TypeScript接口进行prop类型定义
+3. 将复杂组件分解为更小的、可重用的部分
+4. 包含适当的测试文件
+5. 通过翻译函数确保双语支持
+
+### State Management
+### 状态管理
+
+- Use React Context for global state when necessary
+- Prefer local component state for UI-specific states
+- Use custom hooks to encapsulate complex logic
+- Implement proper loading and error states
+
+- 在必要时使用React Context进行全局状态管理
+- 对UI特定状态优先使用本地组件状态
+- 使用自定义钩子封装复杂逻辑
+- 实现适当的加载和错误状态
+
+### Working with Contracts
+### 与合约交互
+
+- All contract ABIs should be stored in a central location
+- Use typed hooks for contract interactions
+- Include proper error handling for failed transactions
+- Display loading states during pending transactions
+- Implement proper transaction confirmation flows
+
+- 所有合约ABI应存储在一个中央位置
+- 使用类型化钩子进行合约交互
+- 对失败的交易包含适当的错误处理
+- 在待处理交易期间显示加载状态
+- 实现适当的交易确认流程
+
+### Bilingual Support
+### 双语支持
+
+- Use the language context for accessing current language setting
+- Create separate translation objects for each page or component
+- Use typed translation keys for better type checking
+- Implement a consistent function naming pattern (t, st, ft, etc.)
+- Test UI in both languages to ensure proper layout handling
+
+- 使用语言上下文访问当前语言设置
+- 为每个页面或组件创建单独的翻译对象
+- 使用类型化的翻译键以实现更好的类型检查
+- 实现一致的函数命名模式（t, st, ft等）
+- 在两种语言中测试UI以确保适当的布局处理 
