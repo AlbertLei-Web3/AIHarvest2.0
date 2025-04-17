@@ -42,9 +42,9 @@ export default function Home() {
   const { isConnected } = useAccount();
   
   // Get translations for this page
-  const homeT = (key: string): string => {
+  const homeT = (key: keyof typeof translations.en): string => {
     const currentTranslations = translations[language];
-    return currentTranslations[key as keyof typeof currentTranslations] || key;
+    return currentTranslations[key] || key;
   };
 
   return (

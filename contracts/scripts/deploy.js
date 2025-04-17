@@ -3,46 +3,54 @@ const hre = require("hardhat");
 async function main() {
   console.log("Deploying AIHarvest contracts...");
 
-  // Get the contract factories
+  // Get the contract factories 获取合约工厂
   const AIHToken = await hre.ethers.getContractFactory("AIHToken");
   
-  // Deploy token with team and ecosystem wallets
+  // Get signers
+  const signers = await hre.ethers.getSigners();
+  console.log("Deploying with account:", signers[0].address);
+  
+  // Deploy token with team and ecosystem wallets 使用团队和生态系统钱包部署代币
   console.log("Deploying AIHToken...");
-  const teamWallet = process.env.TEAM_WALLET || (await hre.ethers.getSigners())[1].address;
-  const ecosystemWallet = process.env.ECOSYSTEM_WALLET || (await hre.ethers.getSigners())[2].address;
+  // Use the first signer as fallback if there aren't enough signers
+  const teamWallet = process.env.TEAM_WALLET || (signers.length > 1 ? signers[1].address : signers[0].address);
+  const ecosystemWallet = process.env.ECOSYSTEM_WALLET || (signers.length > 2 ? signers[2].address : signers[0].address);
+  
+  console.log("Team wallet:", teamWallet);
+  console.log("Ecosystem wallet:", ecosystemWallet);
   
   const aihToken = await AIHToken.deploy(teamWallet, ecosystemWallet);
-  await aihToken.waitForDeployment();
+  await aihToken.deployed();
   
-  const tokenAddress = await aihToken.getAddress();
+  const tokenAddress = aihToken.address;
   console.log("AIHToken deployed to:", tokenAddress);
   
-  // Deploy SimpleSwapRouter
+  // Deploy SimpleSwapRouter 部署SimpleSwapRouter
   console.log("Deploying SimpleSwapRouter...");
   const SimpleSwapRouter = await hre.ethers.getContractFactory("SimpleSwapRouter");
   const simpleSwapRouter = await SimpleSwapRouter.deploy(tokenAddress);
-  await simpleSwapRouter.waitForDeployment();
+  await simpleSwapRouter.deployed();
   
-  const routerAddress = await simpleSwapRouter.getAddress();
+  const routerAddress = simpleSwapRouter.address;
   console.log("SimpleSwapRouter deployed to:", routerAddress);
   
-  // Deploy SimpleFarm
+  // Deploy SimpleFarm 部署SimpleFarm
   console.log("Deploying SimpleFarm...");
   const SimpleFarm = await hre.ethers.getContractFactory("SimpleFarm");
   const simpleFarm = await SimpleFarm.deploy(tokenAddress);
-  await simpleFarm.waitForDeployment();
+  await simpleFarm.deployed();
   
-  const farmAddress = await simpleFarm.getAddress();
+  const farmAddress = simpleFarm.address;
   console.log("SimpleFarm deployed to:", farmAddress);
   
-  // Set farm address in token contract
+  // Set farm address in token contract 在代币合约中设置农场地址
   console.log("Setting farm address in token contract...");
   await aihToken.setFarmAddress(farmAddress);
   console.log("Farm address set in token contract.");
   
   console.log("Deployment complete!");
   
-  // Save deployment addresses
+  // Save deployment addresses 保存部署地址
   const fs = require("fs");
   const addresses = {
     AIHToken: tokenAddress,
@@ -52,7 +60,7 @@ async function main() {
     deploymentTime: new Date().toISOString()
   };
   
-  // Update the path to save in the contracts directory
+  // Update the path to save in the contracts directory 更新保存路径到合约目录
   const deploymentDir = "../deployments";
   if (!fs.existsSync(deploymentDir)) {
     fs.mkdirSync(deploymentDir, { recursive: true });

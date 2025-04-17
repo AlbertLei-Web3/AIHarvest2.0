@@ -73,6 +73,13 @@ export const Header: React.FC = () => {
     return router.pathname === path;
   };
 
+  // Define navigation links that will be shown conditionally after mounting
+  const navigationLinks = [
+    { href: '/swap', label: 'swap' },
+    { href: '/liquidity', label: 'liquidity' },
+    { href: '/farm', label: 'farm' },
+  ];
+
   return (
     <header className="sticky top-0 z-50 w-full bg-dark-light shadow-lg backdrop-blur-sm border-b border-primary/10">
       <div className="container mx-auto px-4 py-4">
@@ -85,60 +92,29 @@ export const Header: React.FC = () => {
               <span className="bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text">AIHarvest</span>
             </Link>
 
-            {/* Only render nav on client-side */}
-            {mounted && (
-              <div className="hidden md:block">
-                {isConnected && (
-                  <nav className="flex space-x-8">
-                    <Link
-                      href="/swap"
-                      className={`text-sm font-medium transition-colors relative ${
-                        isActive('/swap')
-                          ? 'text-secondary opacity-100'
-                          : 'text-white hover:text-primary opacity-80 hover:opacity-100'
-                      }`}
-                    >
-                      <span className="relative py-2 block">
-                        {t('swap')}
-                        {isActive('/swap') && (
-                          <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-primary to-secondary"></span>
-                        )}
-                      </span>
-                    </Link>
-                    <Link
-                      href="/liquidity"
-                      className={`text-sm font-medium transition-colors relative ${
-                        isActive('/liquidity')
-                          ? 'text-secondary opacity-100'
-                          : 'text-white hover:text-primary opacity-80 hover:opacity-100'
-                      }`}
-                    >
-                      <span className="relative py-2 block">
-                        {t('liquidity')}
-                        {isActive('/liquidity') && (
-                          <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-primary to-secondary"></span>
-                        )}
-                      </span>
-                    </Link>
-                    <Link
-                      href="/farm"
-                      className={`text-sm font-medium transition-colors relative ${
-                        isActive('/farm')
-                          ? 'text-secondary opacity-100'
-                          : 'text-white hover:text-primary opacity-80 hover:opacity-100'
-                      }`}
-                    >
-                      <span className="relative py-2 block">
-                        {t('farm')}
-                        {isActive('/farm') && (
-                          <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-primary to-secondary"></span>
-                        )}
-                      </span>
-                    </Link>
-                  </nav>
-                )}
-              </div>
-            )}
+            {/* Navigation always rendered for server, but hidden with CSS until mounted */}
+            <div className={`hidden md:block ${!mounted ? 'invisible' : 'visible'}`}>
+              <nav className="flex space-x-8">
+                {navigationLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`text-sm font-medium transition-colors relative ${
+                      isActive(link.href)
+                        ? 'text-secondary opacity-100'
+                        : 'text-white hover:text-primary opacity-80 hover:opacity-100'
+                    }`}
+                  >
+                    <span className="relative py-2 block">
+                      {t(link.label)}
+                      {isActive(link.href) && (
+                        <span className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-primary to-secondary"></span>
+                      )}
+                    </span>
+                  </Link>
+                ))}
+              </nav>
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">
@@ -180,46 +156,25 @@ export const Header: React.FC = () => {
           </div>
         </div>
         
-        {/* Mobile menu */}
-        {isMobileMenuOpen && mounted && isConnected && (
-          <div className="md:hidden mt-4 pt-4 border-t border-white/10">
-            <nav className="flex flex-col space-y-3">
+        {/* Mobile menu - rendered always but hidden with CSS until needed */}
+        <div className={`md:hidden mt-4 pt-4 border-t border-white/10 ${(!mounted || !isMobileMenuOpen) ? 'hidden' : 'block'}`}>
+          <nav className="flex flex-col space-y-3">
+            {navigationLinks.map((link) => (
               <Link
-                href="/swap"
+                key={link.href}
+                href={link.href}
                 className={`text-sm font-medium py-2 px-4 rounded-lg ${
-                  isActive('/swap')
+                  isActive(link.href)
                     ? 'bg-dark-default text-secondary'
                     : 'text-white hover:bg-dark-default'
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
-                {t('swap')}
+                {t(link.label)}
               </Link>
-              <Link
-                href="/liquidity"
-                className={`text-sm font-medium py-2 px-4 rounded-lg ${
-                  isActive('/liquidity')
-                    ? 'bg-dark-default text-secondary'
-                    : 'text-white hover:bg-dark-default'
-                }`}
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {t('liquidity')}
-              </Link>
-              <Link
-                href="/farm"
-                className={`text-sm font-medium py-2 px-4 rounded-lg ${
-                  isActive('/farm')
-                    ? 'bg-dark-default text-secondary'
-                    : 'text-white hover:bg-dark-default'
-                }`}
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                {t('farm')}
-              </Link>
-            </nav>
-          </div>
-        )}
+            ))}
+          </nav>
+        </div>
       </div>
     </header>
   );

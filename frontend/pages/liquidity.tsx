@@ -2,13 +2,25 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import Image from 'next/image';
+import { 
+  TOKENS, 
+  getTokenBalance, 
+  getPairReserves, 
+  calculateLPTokenAmount, 
+  addLiquidity,
+  removeLiquidity,
+  approveToken,
+  getUserLiquidityPositions
+} from '@/utils/contracts';
+import { ethers } from 'ethers';
 
 interface Token {
   name: string;
   symbol: string;
   logo: string;
-  balance: number;
+  balance: string;
   decimals: number;
+  address: string;
 }
 
 interface TokensType {
@@ -22,10 +34,13 @@ interface ExchangeRatesType {
 interface LiquidityPosition {
   tokenA: string;
   tokenB: string;
-  amountA: number;
-  amountB: number;
-  lpAmount: number;
-  sharePercentage: number;
+  tokenASymbol: string;
+  tokenBSymbol: string;
+  tokenAAmount: string;
+  tokenBAmount: string;
+  lpBalance: string;
+  poolShare: number;
+  pairAddress: string;
 }
 
 interface LiquidityTranslation {
@@ -56,34 +71,54 @@ interface LiquidityTranslationsType {
 }
 
 // Token data 
-const tokens: TokensType = {
+const tokensData: TokensType = {
   eth: {
     name: 'Ethereum',
     symbol: 'ETH',
     logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    balance: 1.5,
-    decimals: 18
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.ETH
   },
   aih: {
     name: 'AIH Token',
     symbol: 'AIH',
     logo: 'https://cryptologos.cc/logos/aave-aave-logo.svg',
-    balance: 1000,
-    decimals: 18
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.AIH
   },
   usdt: {
     name: 'Tether USD',
     symbol: 'USDT',
     logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
-    balance: 500,
-    decimals: 6
+    balance: '0',
+    decimals: 6,
+    address: TOKENS.USDT
   },
   dai: {
     name: 'Dai Stablecoin',
     symbol: 'DAI',
     logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-    balance: 500,
-    decimals: 18
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.DAI
+  },
+  td: {
+    name: 'TD Token',
+    symbol: 'TD',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.TD
+  },
+  fhbi: {
+    name: 'FHBI Token',
+    symbol: 'FHBI',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI
   }
 };
 
@@ -98,6 +133,7 @@ const exchangeRates: ExchangeRatesType = {
 };
 
 const LiquidityPage = () => {
+  const [tokens, setTokens] = useState<TokensType>(tokensData);
   const [tokenA, setTokenA] = useState<string>('eth');
   const [tokenB, setTokenB] = useState<string>('aih');
   const [tokenAAmount, setTokenAAmount] = useState<string>('');
@@ -108,6 +144,14 @@ const LiquidityPage = () => {
   const [lpAmount, setLpAmount] = useState<string>('0.0');
   const [poolShare, setPoolShare] = useState<string>('0.00%');
   const [positions, setPositions] = useState<LiquidityPosition[]>([]);
+  const [slippage, setSlippage] = useState<number>(0.5); // Default slippage tolerance 0.5%
+  const [isApprovingA, setIsApprovingA] = useState<boolean>(false);
+  const [isApprovingB, setIsApprovingB] = useState<boolean>(false);
+  const [isAddingLiquidity, setIsAddingLiquidity] = useState<boolean>(false);
+  const [isRemovingLiquidity, setIsRemovingLiquidity] = useState<boolean>(false);
+  const [transactionPending, setTransactionPending] = useState<boolean>(false);
+  const [mounted, setMounted] = useState<boolean>(false);
+  const [pairReserves, setPairReserves] = useState<[string, string]>(["0", "0"]);
   
   const { address, isConnected } = useAccount();
   const { language, t } = useLanguage();
@@ -162,70 +206,173 @@ const LiquidityPage = () => {
     return translations[key] || key;
   };
   
-  // Calculate exchange rate between tokens
-  const getExchangeRate = (from: string, to: string): number => {
-    if (from === to) return 1;
+  // Handle client-side rendering to prevent hydration mismatch
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  
+  // Fetch token balances and user positions when connected
+  useEffect(() => {
+    const fetchData = async () => {
+      if (isConnected && address && mounted) {
+        try {
+          // Update token balances
+          const updatedTokens = { ...tokens };
+          
+          for (const [key, token] of Object.entries(tokens)) {
+            try {
+              const balance = await getTokenBalance(token.address, address);
+              updatedTokens[key] = { ...token, balance };
+            } catch (error) {
+              console.error(`Error fetching balance for ${token.symbol}:`, error);
+            }
+          }
+          
+          setTokens(updatedTokens);
+          
+          // Get pair reserves
+          try {
+            const reserves = await getPairReserves(
+              tokens[tokenA].address,
+              tokens[tokenB].address
+            );
+            setPairReserves(reserves);
+          } catch (error) {
+            console.error("Error fetching pair reserves:", error);
+          }
+          
+          // Fetch user's liquidity positions
+          try {
+            // Create all possible token pairs for checking positions
+            const possiblePairs: [string, string][] = [];
+            const tokenEntries = Object.entries(tokens);
+            
+            for (let i = 0; i < tokenEntries.length; i++) {
+              for (let j = i + 1; j < tokenEntries.length; j++) {
+                possiblePairs.push([
+                  tokenEntries[i][1].address,
+                  tokenEntries[j][1].address
+                ]);
+              }
+            }
+            
+            const userPositions = await getUserLiquidityPositions(address, possiblePairs);
+            setPositions(userPositions);
+          } catch (error) {
+            console.error("Error fetching user positions:", error);
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        }
+      }
+    };
     
-    const key = `${from}_${to}`;
-    if (exchangeRates[key]) {
-      return exchangeRates[key];
-    }
-
-    const reverseKey = `${to}_${from}`;
-    if (exchangeRates[reverseKey]) {
-      return 1 / exchangeRates[reverseKey];
-    }
-
-    return 0;
-  };
+    fetchData();
+    // Refresh data every 30 seconds
+    const interval = setInterval(fetchData, 30000);
+    return () => clearInterval(interval);
+  }, [isConnected, address, mounted, tokenA, tokenB]);
   
   // Calculate token B amount based on token A input
-  const calculateTokenBAmount = (): void => {
-    if (!tokenAAmount || isNaN(parseFloat(tokenAAmount))) {
+  const calculateTokenBAmount = async (): Promise<void> => {
+    if (!tokenAAmount || isNaN(parseFloat(tokenAAmount)) || parseFloat(tokenAAmount) <= 0) {
       setTokenBAmount('');
       setShowLpInfo(false);
       return;
     }
     
-    const rate = getExchangeRate(tokenA, tokenB);
-    const output = parseFloat(tokenAAmount) * rate;
-    setTokenBAmount(output.toFixed(6));
-    
-    // Update LP info
-    calculateLpAmount();
+    try {
+      setTransactionPending(true);
+      
+      if (parseFloat(pairReserves[0]) === 0 && parseFloat(pairReserves[1]) === 0) {
+        // For new pools with no reserves, use a fixed ratio
+        // In a real app, you might want to use an oracle or external price source
+        const initialRatio = 1; // 1:1 ratio for demonstration
+        const amountB = parseFloat(tokenAAmount) * initialRatio;
+        setTokenBAmount(amountB.toFixed(6));
+      } else {
+        // Calculate based on existing reserves
+        const reserveA = parseFloat(pairReserves[0]);
+        const reserveB = parseFloat(pairReserves[1]);
+        const amountB = (parseFloat(tokenAAmount) * reserveB) / reserveA;
+        setTokenBAmount(amountB.toFixed(6));
+      }
+      
+      await calculateLpTokens();
+    } catch (error) {
+      console.error("Error calculating token B amount:", error);
+    } finally {
+      setTransactionPending(false);
+    }
   };
   
   // Calculate token A amount based on token B input
-  const calculateTokenAAmount = (): void => {
-    if (!tokenBAmount || isNaN(parseFloat(tokenBAmount))) {
+  const calculateTokenAAmount = async (): Promise<void> => {
+    if (!tokenBAmount || isNaN(parseFloat(tokenBAmount)) || parseFloat(tokenBAmount) <= 0) {
       setTokenAAmount('');
       setShowLpInfo(false);
       return;
     }
     
-    const rate = getExchangeRate(tokenB, tokenA);
-    const output = parseFloat(tokenBAmount) * rate;
-    setTokenAAmount(output.toFixed(6));
-    
-    // Update LP info
-    calculateLpAmount();
+    try {
+      setTransactionPending(true);
+      
+      if (parseFloat(pairReserves[0]) === 0 && parseFloat(pairReserves[1]) === 0) {
+        // For new pools with no reserves, use a fixed ratio
+        const initialRatio = 1; // 1:1 ratio for demonstration
+        const amountA = parseFloat(tokenBAmount) / initialRatio;
+        setTokenAAmount(amountA.toFixed(6));
+      } else {
+        // Calculate based on existing reserves
+        const reserveA = parseFloat(pairReserves[0]);
+        const reserveB = parseFloat(pairReserves[1]);
+        const amountA = (parseFloat(tokenBAmount) * reserveA) / reserveB;
+        setTokenAAmount(amountA.toFixed(6));
+      }
+      
+      await calculateLpTokens();
+    } catch (error) {
+      console.error("Error calculating token A amount:", error);
+    } finally {
+      setTransactionPending(false);
+    }
   };
   
-  // Calculate LP token amount
-  const calculateLpAmount = (): void => {
-    const amountA = parseFloat(tokenAAmount);
-    const amountB = parseFloat(tokenBAmount);
-    
-    if (!amountA || !amountB || isNaN(amountA) || isNaN(amountB)) {
+  // Calculate LP tokens to receive
+  const calculateLpTokens = async (): Promise<void> => {
+    if (!tokenAAmount || !tokenBAmount || 
+        isNaN(parseFloat(tokenAAmount)) || isNaN(parseFloat(tokenBAmount)) ||
+        parseFloat(tokenAAmount) <= 0 || parseFloat(tokenBAmount) <= 0) {
       setShowLpInfo(false);
       return;
     }
     
-    // Simple geometric mean for LP token calculation (simplified)
-    const lpTokens = Math.sqrt(amountA * amountB).toFixed(4);
-    setLpAmount(lpTokens);
-    setPoolShare('0.02%'); // Placeholder for demo
-    setShowLpInfo(true);
+    try {
+      const lpTokens = await calculateLPTokenAmount(
+        tokens[tokenA].address,
+        tokens[tokenB].address,
+        tokenAAmount,
+        tokenBAmount
+      );
+      
+      setLpAmount(parseFloat(lpTokens).toFixed(6));
+      
+      // Calculate pool share
+      if (parseFloat(pairReserves[0]) === 0 && parseFloat(pairReserves[1]) === 0) {
+        // First liquidity provider gets 100% of the pool
+        setPoolShare('100.00%');
+      } else {
+        const reserveA = parseFloat(pairReserves[0]);
+        const amountA = parseFloat(tokenAAmount);
+        const share = (amountA / (reserveA + amountA)) * 100;
+        setPoolShare(`${share.toFixed(2)}%`);
+      }
+      
+      setShowLpInfo(true);
+    } catch (error) {
+      console.error("Error calculating LP tokens:", error);
+      setShowLpInfo(false);
+    }
   };
   
   // Handle token selection
@@ -251,10 +398,53 @@ const LiquidityPage = () => {
     }
     
     setShowTokenModal(false);
+    
+    // Reset amounts
+    setTokenAAmount('');
+    setTokenBAmount('');
+    setShowLpInfo(false);
   };
   
-  // Add liquidity
-  const handleAddLiquidity = (): void => {
+  // Handle approve token A
+  const handleApproveTokenA = async (): Promise<void> => {
+    if (!isConnected || !tokenAAmount) return;
+    
+    try {
+      setIsApprovingA(true);
+      const tx = await approveToken(tokens[tokenA].address, tokenAAmount);
+      
+      // Wait for transaction to be mined
+      await tx.wait();
+      alert(`${tokens[tokenA].symbol} approved for adding liquidity`);
+    } catch (error) {
+      console.error('Error approving token A:', error);
+      alert(`Error approving token A: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsApprovingA(false);
+    }
+  };
+  
+  // Handle approve token B
+  const handleApproveTokenB = async (): Promise<void> => {
+    if (!isConnected || !tokenBAmount) return;
+    
+    try {
+      setIsApprovingB(true);
+      const tx = await approveToken(tokens[tokenB].address, tokenBAmount);
+      
+      // Wait for transaction to be mined
+      await tx.wait();
+      alert(`${tokens[tokenB].symbol} approved for adding liquidity`);
+    } catch (error) {
+      console.error('Error approving token B:', error);
+      alert(`Error approving token B: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setIsApprovingB(false);
+    }
+  };
+  
+  // Handle add liquidity
+  const handleAddLiquidity = async (): Promise<void> => {
     if (!isConnected) {
       return;
     }
@@ -265,38 +455,104 @@ const LiquidityPage = () => {
       return;
     }
     
-    // In a real app, this would call the contract
-    // For the prototype, we just add a position
-    const newPosition: LiquidityPosition = {
-      tokenA,
-      tokenB,
-      amountA: parseFloat(tokenAAmount),
-      amountB: parseFloat(tokenBAmount),
-      lpAmount: parseFloat(lpAmount),
-      sharePercentage: 0.02 // Placeholder for demo
-    };
-    
-    setPositions([...positions, newPosition]);
-    
-    // Reset the form
-    setTokenAAmount('');
-    setTokenBAmount('');
-    setShowLpInfo(false);
-    
-    alert(`Added liquidity: ${tokenAAmount} ${tokens[tokenA].symbol} + ${tokenBAmount} ${tokens[tokenB].symbol}`);
+    try {
+      setIsAddingLiquidity(true);
+      
+      // Execute add liquidity
+      const tx = await addLiquidity(
+        tokens[tokenA].address,
+        tokens[tokenB].address,
+        tokenAAmount,
+        tokenBAmount,
+        slippage
+      );
+      
+      // Wait for transaction to be mined
+      await tx.wait();
+      
+      alert(`Successfully added ${tokenAAmount} ${tokens[tokenA].symbol} and ${tokenBAmount} ${tokens[tokenB].symbol} to the liquidity pool`);
+      
+      // Reset form
+      setTokenAAmount('');
+      setTokenBAmount('');
+      setShowLpInfo(false);
+      
+      // Refresh data
+      // We'll rely on the useEffect interval to update positions
+    } catch (error) {
+      console.error('Error during adding liquidity:', error);
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error instanceof Error) {
+        // Check if it's an allowance error
+        if (error.message.includes('allowance')) {
+          errorMessage = 'Please approve the tokens first';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      alert(`Failed to add liquidity: ${errorMessage}`);
+    } finally {
+      setIsAddingLiquidity(false);
+    }
   };
   
-  // Update amounts when inputs change
-  useEffect(() => {
-    if (tokenAAmount) {
-      calculateTokenBAmount();
+  // Handle remove liquidity for a position
+  const handleRemoveLiquidity = async (position: LiquidityPosition): Promise<void> => {
+    if (!isConnected) return;
+    
+    try {
+      setIsRemovingLiquidity(true);
+      
+      // Execute remove liquidity
+      const tx = await removeLiquidity(
+        position.tokenA,
+        position.tokenB,
+        position.lpBalance,
+        slippage
+      );
+      
+      // Wait for transaction to be mined
+      await tx.wait();
+      
+      alert(`Successfully removed liquidity from ${position.tokenASymbol}-${position.tokenBSymbol} pool`);
+      
+      // Refresh data
+      // We'll rely on the useEffect interval to update positions
+    } catch (error) {
+      console.error('Error removing liquidity:', error);
+      let errorMessage = 'An unexpected error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
+      alert(`Failed to remove liquidity: ${errorMessage}`);
+    } finally {
+      setIsRemovingLiquidity(false);
     }
+  };
+  
+  // Update output amount when inputs change
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (tokenAAmount) {
+        calculateTokenBAmount();
+      }
+    }, 500);
+    
+    return () => clearTimeout(delayDebounce);
   }, [tokenAAmount, tokenA, tokenB]);
   
   useEffect(() => {
-    if (tokenBAmount) {
-      calculateTokenAAmount();
-    }
+    const delayDebounce = setTimeout(() => {
+      if (tokenBAmount) {
+        calculateTokenAAmount();
+      }
+    }, 500);
+    
+    return () => clearTimeout(delayDebounce);
   }, [tokenBAmount, tokenA, tokenB]);
   
   return (
@@ -319,10 +575,11 @@ const LiquidityPage = () => {
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">{lt('tokenA')}</span>
               <span className="text-sm text-gray-400">
-                {isConnected 
-                  ? `${lt('balance')}: ${tokens[tokenA].balance} ${tokens[tokenA].symbol}`
-                  : lt('connectWallet')
-                }
+                {!mounted ? lt('connectWallet') : (
+                  isConnected 
+                    ? `${lt('balance')}: ${tokens[tokenA].balance} ${tokens[tokenA].symbol}`
+                    : lt('connectWallet')
+                )}
               </span>
             </div>
             <div className="flex items-center bg-dark-default rounded-lg p-3 border border-gray-700">
@@ -363,10 +620,11 @@ const LiquidityPage = () => {
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">{lt('tokenB')}</span>
               <span className="text-sm text-gray-400">
-                {isConnected 
-                  ? `${lt('balance')}: ${tokens[tokenB].balance} ${tokens[tokenB].symbol}`
-                  : lt('connectWallet')
-                }
+                {!mounted ? lt('connectWallet') : (
+                  isConnected 
+                    ? `${lt('balance')}: ${tokens[tokenB].balance} ${tokens[tokenB].symbol}`
+                    : lt('connectWallet')
+                )}
               </span>
             </div>
             <div className="flex items-center bg-dark-default rounded-lg p-3 border border-gray-700">
@@ -418,19 +676,55 @@ const LiquidityPage = () => {
           )}
           
           {/* Connection status and add liquidity button */}
-          {!isConnected && (
-            <div className="text-center p-3 bg-yellow-900/20 rounded-lg mb-4">
-              <p className="text-yellow-500">{lt('walletWarning')}</p>
+          {!mounted ? (
+            <div className="text-center text-gray-400 mb-4">
+              {lt('walletWarning')}
+            </div>
+          ) : !isConnected ? (
+            <div className="text-center text-gray-400 mb-4">
+              {lt('walletWarning')}
+            </div>
+          ) : (
+            <div className="flex flex-col space-y-2">
+              <div className="flex space-x-2">
+                <button 
+                  className={`flex-1 py-3 rounded-lg font-bold text-white ${
+                    isApprovingA || transactionPending
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
+                  }`}
+                  onClick={handleApproveTokenA}
+                  disabled={isApprovingA || transactionPending || !tokenAAmount}
+                >
+                  {isApprovingA ? 'Approving...' : `Approve ${tokens[tokenA].symbol}`}
+                </button>
+                
+                <button 
+                  className={`flex-1 py-3 rounded-lg font-bold text-white ${
+                    isApprovingB || transactionPending
+                      ? 'bg-gray-600 cursor-not-allowed'
+                      : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
+                  }`}
+                  onClick={handleApproveTokenB}
+                  disabled={isApprovingB || transactionPending || !tokenBAmount}
+                >
+                  {isApprovingB ? 'Approving...' : `Approve ${tokens[tokenB].symbol}`}
+                </button>
+              </div>
+              
+              <button 
+                className={`w-full py-3 rounded-lg font-bold text-white ${
+                  !tokenAAmount || !tokenBAmount || isAddingLiquidity || transactionPending
+                    ? 'bg-gray-600 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
+                }`}
+                onClick={handleAddLiquidity}
+                disabled={!tokenAAmount || !tokenBAmount || isAddingLiquidity || transactionPending}
+              >
+                {isAddingLiquidity ? 'Adding Liquidity...' : lt('addButton')}
+              </button>
             </div>
           )}
-          
-          <button
-            className={`w-full py-3 bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white rounded-lg font-medium transition-all duration-300 ${!isConnected ? 'opacity-50 cursor-not-allowed' : ''}`}
-            onClick={handleAddLiquidity}
-            disabled={!isConnected}
-          >
-            {lt('addButton')}
-          </button>
         </div>
         
         {/* My Liquidity Positions */}
@@ -465,15 +759,15 @@ const LiquidityPage = () => {
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
                       <div className="text-gray-400">{lt('pooled')} {tokens[position.tokenA].symbol}</div>
-                      <div className="text-white">{position.amountA} {tokens[position.tokenA].symbol}</div>
+                      <div className="text-white">{position.tokenAAmount} {tokens[position.tokenA].symbol}</div>
                     </div>
                     <div>
                       <div className="text-gray-400">{lt('pooled')} {tokens[position.tokenB].symbol}</div>
-                      <div className="text-white">{position.amountB} {tokens[position.tokenB].symbol}</div>
+                      <div className="text-white">{position.tokenBAmount} {tokens[position.tokenB].symbol}</div>
                     </div>
                     <div>
                       <div className="text-gray-400">{lt('yourShare')}</div>
-                      <div className="text-white">{position.sharePercentage}%</div>
+                      <div className="text-white">{position.poolShare}%</div>
                     </div>
                   </div>
                 </div>
