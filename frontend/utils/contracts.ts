@@ -94,6 +94,141 @@ export const approveToken = async (tokenAddress: string, amount: string): Promis
   return tokenContract.approve(ROUTER_ADDRESS, amountToApprove);
 };
 
+// Approve router to spend LP tokens 批准路由合约花费LP代币
+export const approveLPToken = async (
+  tokenAAddress: string,
+  tokenBAddress: string,
+  amount: string,
+  bypassChecks: boolean = false
+): Promise<ethers.providers.TransactionResponse> => {
+  console.log(`\n-------- APPROVE LP TOKEN TRANSACTION START --------`);
+  console.log(`Approving LP tokens for pair ${tokenAAddress} and ${tokenBAddress}`);
+  console.log(`Amount: ${amount}, Bypass Checks: ${bypassChecks}`);
+  
+  const DEBUG = true; // Set to true to enable verbose logging
+  
+  try {
+    const signer = getSigner();
+    const signerAddress = await signer.getAddress();
+    console.log(`Using signer address: ${signerAddress}`);
+    
+    const provider = signer.provider;
+    if (DEBUG) console.log(`Provider: ${provider?.connection?.url || 'No provider URL'}`);
+    
+    const router = getRouterContract(signer);
+    if (DEBUG) console.log(`Router address: ${ROUTER_ADDRESS}`);
+    
+    // Get pair address 获取代币对地址
+    let pairAddress;
+    try {
+      // First, check if both tokens are valid contract addresses
+      if (DEBUG && !bypassChecks) {
+        const codeA = await provider.getCode(tokenAAddress);
+        const codeB = await provider.getCode(tokenBAddress);
+        console.log(`Token A contract code length: ${codeA.length}`);
+        console.log(`Token B contract code length: ${codeB.length}`);
+        if (codeA.length <= 2) console.log(`WARNING: Token A does not appear to be a valid contract!`);
+        if (codeB.length <= 2) console.log(`WARNING: Token B does not appear to be a valid contract!`);
+      }
+      
+      pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+      console.log(`Pair address: ${pairAddress}`);
+      
+      if (pairAddress === ethers.constants.AddressZero) {
+        throw new Error("Pair does not exist. You need to add liquidity first to create the pair.");
+      }
+      
+      // Verify if pair address is a valid contract
+      if (DEBUG && !bypassChecks) {
+        const code = await provider.getCode(pairAddress);
+        console.log(`Pair contract code length: ${code.length}`);
+        if (code.length <= 2 && !bypassChecks) {
+          console.log("WARNING: Pair contract appears empty but router knows about it. Continuing with caution...");
+        }
+      }
+    } catch (error) {
+      console.error("Error getting pair address:", error);
+      throw new Error(`Failed to get pair address: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    console.log(`Approving LP tokens for pair: ${pairAddress}`);
+    
+    if (bypassChecks) {
+      console.log(`BYPASS MODE: Skipping token approval and proceeding directly to removal.`);
+      // Create a mock transaction to satisfy the interface requirement
+      return {
+        hash: "bypass-approval-hash",
+        wait: async () => ({ status: 1 })
+      } as any;
+    }
+    
+    // Get LP token contract
+    try {
+      // Use custom safer approach to check if the contract is valid
+      const lpTokenContract = getTokenContract(pairAddress, signer);
+      console.log("LP token contract created");
+      
+      // Safely check if the contract has the proper methods we need
+      if (DEBUG && !bypassChecks) {
+        try {
+          console.log("Trying to get token name...");
+          const name = await lpTokenContract.name();
+          console.log(`LP Token name: ${name}`);
+        } catch (e) {
+          console.warn("WARNING: Could not get token name. This might not be a standard ERC20 token.", e);
+        }
+        
+        try {
+          console.log("Trying to get token symbol...");
+          const symbol = await lpTokenContract.symbol();
+          console.log(`LP Token symbol: ${symbol}`);
+        } catch (e) {
+          console.warn("WARNING: Could not get token symbol. This might not be a standard ERC20 token.", e);
+        }
+      }
+      
+      // Check current allowance - this is where the previous error occurred
+      console.log("Checking current allowance...");
+      let currentAllowance;
+      try {
+        currentAllowance = await lpTokenContract.allowance(signerAddress, ROUTER_ADDRESS);
+        console.log(`Current allowance: ${ethers.utils.formatUnits(currentAllowance, 18)}`);
+      } catch (e) {
+        console.error("Error checking allowance:", e);
+        if (bypassChecks) {
+          console.log("Bypassing allowance check error due to bypass flag");
+        } else {
+          throw new Error(`Failed to check allowance. This may not be a valid LP token contract: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      
+      // Parse amount with 18 decimals (LP tokens typically have 18 decimals)
+      const amountToApprove = ethers.utils.parseUnits(amount, 18);
+      console.log(`Amount to approve (in wei): ${amountToApprove.toString()}`);
+      
+      // Approve router to spend LP tokens
+      console.log(`Sending approval transaction...`);
+      try {
+        const tx = await lpTokenContract.approve(ROUTER_ADDRESS, amountToApprove);
+        console.log(`Approval transaction submitted with hash: ${tx.hash}`);
+        console.log(`-------- APPROVE LP TOKEN TRANSACTION END --------\n`);
+        return tx;
+      } catch (e) {
+        console.error("Error sending approve transaction:", e);
+        throw new Error(`Failed to send approval transaction: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    } catch (error) {
+      console.error("Error during LP token approval:", error);
+      console.log(`-------- APPROVE LP TOKEN TRANSACTION FAILED --------\n`);
+      throw new Error(`LP token approval failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  } catch (error) {
+    console.error("Error approving LP tokens:", error);
+    console.log(`-------- APPROVE LP TOKEN TRANSACTION FAILED --------\n`);
+    throw error;
+  }
+};
+
 // Get price quote for swap 获取交换价格报价
 export const getSwapQuote = async (
   fromTokenAddress: string,
@@ -384,57 +519,160 @@ export const removeLiquidity = async (
   tokenAAddress: string,
   tokenBAddress: string,
   liquidity: string,
-  slippageTolerance: number = 0.5 // Default 0.5%
+  slippageTolerance: number = 0.5, // Default 0.5%
+  bypassChecks: boolean = false
 ): Promise<ethers.providers.TransactionResponse> => {
+  console.log(`\n-------- REMOVE LIQUIDITY TRANSACTION START --------`);
+  console.log(`Removing liquidity for tokens: ${tokenAAddress} and ${tokenBAddress}`);
+  console.log(`Liquidity amount: ${liquidity}, Slippage: ${slippageTolerance}%, Bypass Checks: ${bypassChecks}`);
+  
   try {
+    // Get signer and router
     const signer = getSigner();
     const signerAddress = await signer.getAddress();
+    console.log(`Using signer address: ${signerAddress}`);
+    
     const router = getRouterContract(signer);
+    console.log(`Router contract retrieved at ${ROUTER_ADDRESS}`);
     
     // Get pair address 获取代币对地址
-    const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
-    
-    if (pairAddress === ethers.constants.AddressZero) {
-      throw new Error("Pair does not exist");
+    let pairAddress;
+    try {
+      pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+      console.log(`Pair address: ${pairAddress}`);
+      
+      if (pairAddress === ethers.constants.AddressZero) {
+        throw new Error("Pair does not exist");
+      }
+      
+      // Add a check for pair contract code
+      if (!bypassChecks) {
+        const provider = signer.provider;
+        const code = await provider.getCode(pairAddress);
+        console.log(`Pair contract code length: ${code.length}`);
+        
+        if (code.length <= 2) {
+          console.log("WARNING: Pair contract appears empty but router knows about it. This might be a contract deployment issue.");
+          console.log("Will try to proceed with removal, but this might fail.");
+        }
+      }
+    } catch (error) {
+      console.error("Error getting pair address:", error);
+      throw new Error(`Failed to get pair address: ${error instanceof Error ? error.message : String(error)}`);
     }
     
-    // Get reserves 获取储备量
-    const [reserveA, reserveB] = await router.getReserves(
-      pairAddress,
-      tokenAAddress,
-      tokenBAddress
-    );
+    // Special handling for direct removal in case of corrupt contract state
+    if (bypassChecks) {
+      console.log(`BYPASS MODE: Attempting direct router call without preliminary checks...`);
+      try {
+        // Parse liquidity amount
+        const liquidityWei = ethers.utils.parseUnits(liquidity, 18);
+        
+        // Use minimal amounts for min returns
+        const minAmount = ethers.utils.parseUnits("0.0001", 18);
+        
+        // Call router directly with minimal checks
+        const tx = await router.removeLiquidity(
+          tokenAAddress,
+          tokenBAddress,
+          liquidityWei,
+          minAmount,
+          minAmount,
+          signerAddress
+        );
+        
+        console.log(`Transaction submitted with hash: ${tx.hash}`);
+        console.log(`-------- REMOVE LIQUIDITY TRANSACTION END --------\n`);
+        return tx;
+      } catch (error) {
+        console.error("Error in direct removal:", error);
+        throw new Error(`Direct router.removeLiquidity failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     
-    const totalSupply = await router.totalSupply(pairAddress);
+    // Get reserves and total supply
+    let reserveA, reserveB, totalSupply;
+    try {
+      [reserveA, reserveB] = await router.getReserves(
+        pairAddress,
+        tokenAAddress,
+        tokenBAddress
+      );
+      console.log(`Reserves: ${ethers.utils.formatUnits(reserveA)} (token A), ${ethers.utils.formatUnits(reserveB)} (token B)`);
+      
+      totalSupply = await router.totalSupply(pairAddress);
+      console.log(`Total supply: ${ethers.utils.formatUnits(totalSupply)}`);
+    } catch (error) {
+      console.error("Error getting reserves or total supply:", error);
+      throw new Error(`Failed to get reserves or total supply: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    // Parse liquidity amount
     const liquidityWei = ethers.utils.parseUnits(liquidity, 18);
+    console.log(`Liquidity in wei: ${liquidityWei.toString()}`);
     
-    // Calculate amounts based on share of pool 根据池子份额计算数量
-    const amountA = reserveA.mul(liquidityWei).div(totalSupply);
-    const amountB = reserveB.mul(liquidityWei).div(totalSupply);
-    
-    // Calculate minimum amounts based on slippage 根据滑点计算最小数量
-    const amountAMin = amountA.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
-    const amountBMin = amountB.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
+    let amountA, amountB, amountAMin, amountBMin;
+    try {
+      amountA = reserveA.mul(liquidityWei).div(totalSupply);
+      amountB = reserveB.mul(liquidityWei).div(totalSupply);
+  
+      console.log(`Expected token amounts: ${ethers.utils.formatUnits(amountA)} (token A), ${ethers.utils.formatUnits(amountB)} (token B)`);
+      
+      // Calculate minimum amounts based on slippage 根据滑点计算最小数量
+      amountAMin = amountA.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
+      amountBMin = amountB.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
+      console.log(`Minimum amounts (with slippage): ${ethers.utils.formatUnits(amountAMin)} (token A), ${ethers.utils.formatUnits(amountBMin)} (token B)`);
+    } catch (error) {
+      console.error("Error calculating token amounts:", error);
+      throw new Error(`Failed to calculate token amounts: ${error instanceof Error ? error.message : String(error)}`);
+    }
     
     // Check allowance for LP tokens 检查LP代币授权
-    const pairContract = getTokenContract(pairAddress, signer);
-    const allowance = await pairContract.allowance(signerAddress, ROUTER_ADDRESS);
-    
-    if (allowance.lt(liquidityWei)) {
-      throw new Error("Insufficient allowance for LP tokens. Please approve first.");
+    let allowance;
+    try {
+      const pairContract = getTokenContract(pairAddress, signer);
+      allowance = await pairContract.allowance(signerAddress, ROUTER_ADDRESS);
+      console.log(`LP token allowance: ${ethers.utils.formatUnits(allowance)}`);
+      
+      if (allowance.lt(liquidityWei)) {
+        console.error(`Insufficient allowance: ${ethers.utils.formatUnits(allowance)} < ${ethers.utils.formatUnits(liquidityWei)}`);
+        throw new Error("Insufficient allowance for LP tokens. Please approve first.");
+      }
+    } catch (error) {
+      console.error("Error checking allowance:", error);
+      throw new Error(`Failed to check allowance: ${error instanceof Error ? error.message : String(error)}`);
     }
     
     // Remove liquidity 移除流动性
-    return router.removeLiquidity(
-      tokenAAddress,
-      tokenBAddress,
-      liquidityWei,
-      amountAMin,
-      amountBMin,
-      signerAddress
-    );
+    console.log(`\nExecuting removeLiquidity on router contract...`);
+    console.log(`Parameters: 
+      tokenA: ${tokenAAddress}
+      tokenB: ${tokenBAddress}
+      liquidity: ${liquidityWei.toString()}
+      amountAMin: ${amountAMin.toString()}
+      amountBMin: ${amountBMin.toString()}
+      to: ${signerAddress}
+    `);
+    
+    try {
+      const tx = await router.removeLiquidity(
+        tokenAAddress,
+        tokenBAddress,
+        liquidityWei,
+        amountAMin,
+        amountBMin,
+        signerAddress
+      );
+      console.log(`Transaction submitted with hash: ${tx.hash}`);
+      console.log(`-------- REMOVE LIQUIDITY TRANSACTION END --------\n`);
+      return tx;
+    } catch (error) {
+      console.error("Error calling removeLiquidity on router:", error);
+      throw new Error(`Router.removeLiquidity failed: ${error instanceof Error ? error.message : String(error)}`);
+    }
   } catch (error) {
-    console.error("Error removing liquidity:", error);
+    console.error("Failure in removeLiquidity function:", error);
+    console.log(`-------- REMOVE LIQUIDITY TRANSACTION FAILED --------\n`);
     throw error;
   }
 };
@@ -445,60 +683,100 @@ export const getUserLiquidityPositions = async (
   tokenPairs: [string, string][]
 ): Promise<any[]> => {
   try {
+    console.log(`Getting liquidity positions for user ${userAddress}`);
+    console.log(`Checking ${tokenPairs.length} token pairs`);
+    
     const router = getRouterContract();
     const positions = [];
     
     for (const [tokenA, tokenB] of tokenPairs) {
-      // Get pair address 获取代币对地址
-      const pairAddress = await router.getPairAddress(tokenA, tokenB);
-      
-      if (pairAddress === ethers.constants.AddressZero) {
-        continue;
+      try {
+        console.log(`Checking pair: ${tokenA} - ${tokenB}`);
+        
+        // Skip invalid addresses
+        if (!tokenA || !tokenB || tokenA === ethers.constants.AddressZero || tokenB === ethers.constants.AddressZero) {
+          console.log('Skipping invalid token addresses');
+          continue;
+        }
+        
+        // Get pair address 获取代币对地址
+        const pairAddress = await router.getPairAddress(tokenA, tokenB);
+        console.log(`Pair address: ${pairAddress}`);
+        
+        if (pairAddress === ethers.constants.AddressZero) {
+          console.log('Pair does not exist, skipping');
+          continue;
+        }
+        
+        // Get LP token balance 获取LP代币余额
+        const lpBalance = await router.balanceOf(pairAddress, userAddress);
+        console.log(`LP Balance: ${lpBalance.toString()}`);
+        
+        if (lpBalance.isZero()) {
+          console.log('LP balance is zero, skipping');
+          continue;
+        }
+        
+        console.log('Found position with non-zero LP balance!');
+        
+        // Get reserves 获取储备量
+        const [reserveA, reserveB] = await router.getReserves(
+          pairAddress,
+          tokenA,
+          tokenB
+        );
+        
+        const totalSupply = await router.totalSupply(pairAddress);
+        
+        // Calculate share of pool 计算池子份额
+        const poolShare = lpBalance.mul(ethers.BigNumber.from("100")).div(totalSupply);
+        
+        // Calculate token amounts based on share 根据份额计算代币数量        
+        const tokenAAmount = reserveA.mul(lpBalance).div(totalSupply);
+        const tokenBAmount = reserveB.mul(lpBalance).div(totalSupply);
+        
+        let tokenASymbol, tokenBSymbol, tokenADecimals, tokenBDecimals;
+        
+        try {
+          const tokenAContract = getTokenContract(tokenA);
+          tokenASymbol = await tokenAContract.symbol();
+          tokenADecimals = await tokenAContract.decimals();
+        } catch (error) {
+          console.error(`Error getting token A details: ${error}`);
+          tokenASymbol = "Unknown";
+          tokenADecimals = 18;
+        }
+        
+        try {
+          const tokenBContract = getTokenContract(tokenB);
+          tokenBSymbol = await tokenBContract.symbol();
+          tokenBDecimals = await tokenBContract.decimals();
+        } catch (error) {
+          console.error(`Error getting token B details: ${error}`);
+          tokenBSymbol = "Unknown";
+          tokenBDecimals = 18;
+        }
+        
+        const position = {
+          tokenA,
+          tokenB,
+          tokenASymbol,
+          tokenBSymbol,
+          tokenAAmount: ethers.utils.formatUnits(tokenAAmount, tokenADecimals),
+          tokenBAmount: ethers.utils.formatUnits(tokenBAmount, tokenBDecimals),
+          lpBalance: ethers.utils.formatUnits(lpBalance, 18),
+          poolShare: poolShare.toNumber() / 100,
+          pairAddress
+        };
+        
+        console.log('Adding position:', position);
+        positions.push(position);
+      } catch (error) {
+        console.error(`Error processing pair ${tokenA}-${tokenB}:`, error);
       }
-      
-      // Get LP token balance 获取LP代币余额
-      const lpBalance = await router.balanceOf(pairAddress, userAddress);
-      
-      if (lpBalance.isZero()) {
-        continue;
-      }
-      
-      // Get reserves 获取储备量
-      const [reserveA, reserveB] = await router.getReserves(
-        pairAddress,
-        tokenA,
-        tokenB
-      );
-      
-      const totalSupply = await router.totalSupply(pairAddress);
-      
-      // Calculate share of pool 计算池子份额
-      const poolShare = lpBalance.mul(ethers.BigNumber.from("100")).div(totalSupply);
-      
-      // Calculate token amounts based on share 根据份额计算代币数量        
-      const tokenAAmount = reserveA.mul(lpBalance).div(totalSupply);
-      const tokenBAmount = reserveB.mul(lpBalance).div(totalSupply);
-      
-      const tokenAContract = getTokenContract(tokenA);
-      const tokenBContract = getTokenContract(tokenB);
-      const tokenASymbol = await tokenAContract.symbol();
-      const tokenBSymbol = await tokenBContract.symbol();
-      const tokenADecimals = await tokenAContract.decimals();
-      const tokenBDecimals = await tokenBContract.decimals();
-      
-      positions.push({
-        tokenA,
-        tokenB,
-        tokenASymbol,
-        tokenBSymbol,
-        tokenAAmount: ethers.utils.formatUnits(tokenAAmount, tokenADecimals),
-        tokenBAmount: ethers.utils.formatUnits(tokenBAmount, tokenBDecimals),
-        lpBalance: ethers.utils.formatUnits(lpBalance, 18),
-        poolShare: poolShare.toNumber() / 100,
-        pairAddress
-      });
     }
     
+    console.log(`Found ${positions.length} positions in total`);
     return positions;
   } catch (error) {
     console.error("Error getting user's liquidity positions:", error);

@@ -1,6 +1,5 @@
 import { erc20ABI } from "../constants/abis";
 import { ethers } from "ethers";
-import { toast } from "react-toastify";
 
 // Format token balance for display with specified decimals
 export const formatTokenBalance = (balance: ethers.BigNumber | string, decimals: number = 18): string => {
@@ -83,32 +82,23 @@ export const approveToken = async (
   try {
     const tx = await tokenContract.approve(spender, amount);
     
-    toast.info(
-      language === 'en' 
-        ? 'Approval transaction submitted' 
-        : '授权交易已提交',
-      { autoClose: 5000 }
-    );
+    console.log(language === 'en' 
+      ? 'Approval transaction submitted' 
+      : '授权交易已提交');
     
     await tx.wait();
     
-    toast.success(
-      language === 'en' 
-        ? 'Token approved successfully' 
-        : '代币授权成功',
-      { autoClose: 5000 }
-    );
+    console.log(language === 'en' 
+      ? 'Token approved successfully' 
+      : '代币授权成功');
     
     return true;
   } catch (e) {
     console.error("Error approving token:", e);
     
-    toast.error(
-      language === 'en' 
-        ? 'Failed to approve token' 
-        : '代币授权失败',
-      { autoClose: 5000 }
-    );
+    console.error(language === 'en' 
+      ? 'Failed to approve token' 
+      : '代币授权失败');
     
     return false;
   }

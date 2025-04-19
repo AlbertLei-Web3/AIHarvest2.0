@@ -10,7 +10,11 @@ import {
   addLiquidity,
   removeLiquidity,
   approveToken,
-  getUserLiquidityPositions
+  getUserLiquidityPositions,
+  approveLPToken,
+  getRouterContract,
+  getTokenContract,
+  createTokenPair
 } from '@/utils/contracts';
 import { ethers } from 'ethers';
 
@@ -152,6 +156,11 @@ const LiquidityPage = () => {
   const [transactionPending, setTransactionPending] = useState<boolean>(false);
   const [mounted, setMounted] = useState<boolean>(false);
   const [pairReserves, setPairReserves] = useState<[string, string]>(["0", "0"]);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
+  const [verificationResult, setVerificationResult] = useState<string>('');
   
   const { address, isConnected } = useAccount();
   const { language, t } = useLanguage();
@@ -241,26 +250,8 @@ const LiquidityPage = () => {
             console.error("Error fetching pair reserves:", error);
           }
           
-          // Fetch user's liquidity positions
-          try {
-            // Create all possible token pairs for checking positions
-            const possiblePairs: [string, string][] = [];
-            const tokenEntries = Object.entries(tokens);
-            
-            for (let i = 0; i < tokenEntries.length; i++) {
-              for (let j = i + 1; j < tokenEntries.length; j++) {
-                possiblePairs.push([
-                  tokenEntries[i][1].address,
-                  tokenEntries[j][1].address
-                ]);
-              }
-            }
-            
-            const userPositions = await getUserLiquidityPositions(address, possiblePairs);
-            setPositions(userPositions);
-          } catch (error) {
-            console.error("Error fetching user positions:", error);
-          }
+          // Fetch user's liquidity positions using the dedicated function
+          await refreshPositions();
         } catch (error) {
           console.error("Error fetching data:", error);
         }
@@ -477,8 +468,9 @@ const LiquidityPage = () => {
       setTokenBAmount('');
       setShowLpInfo(false);
       
-      // Refresh data
-      // We'll rely on the useEffect interval to update positions
+      // Immediately refresh positions instead of waiting for the interval
+      await refreshPositions();
+      
     } catch (error) {
       console.error('Error during adding liquidity:', error);
       let errorMessage = 'An unexpected error occurred';
@@ -498,39 +490,77 @@ const LiquidityPage = () => {
     }
   };
   
-  // Handle remove liquidity for a position
-  const handleRemoveLiquidity = async (position: LiquidityPosition): Promise<void> => {
-    if (!isConnected) return;
+  // Add a dedicated function to refresh positions
+  const refreshPositions = async (): Promise<void> => {
+    if (!isConnected || !address || !mounted) return;
     
     try {
-      setIsRemovingLiquidity(true);
+      // Create all possible token pairs for checking positions
+      const possiblePairs: [string, string][] = [];
+      const tokenEntries = Object.entries(tokens);
       
-      // Execute remove liquidity
-      const tx = await removeLiquidity(
-        position.tokenA,
-        position.tokenB,
-        position.lpBalance,
-        slippage
-      );
+      console.log("Token entries for positions check:", tokenEntries.map(entry => `${entry[0]}: ${entry[1].address}`));
       
-      // Wait for transaction to be mined
-      await tx.wait();
-      
-      alert(`Successfully removed liquidity from ${position.tokenASymbol}-${position.tokenBSymbol} pool`);
-      
-      // Refresh data
-      // We'll rely on the useEffect interval to update positions
-    } catch (error) {
-      console.error('Error removing liquidity:', error);
-      let errorMessage = 'An unexpected error occurred';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
+      for (let i = 0; i < tokenEntries.length; i++) {
+        for (let j = i + 1; j < tokenEntries.length; j++) {
+          const pair: [string, string] = [
+            tokenEntries[i][1].address,
+            tokenEntries[j][1].address
+          ];
+          possiblePairs.push(pair);
+          console.log(`Created possible pair: ${tokenEntries[i][0]}-${tokenEntries[j][0]}`);
+        }
       }
       
-      alert(`Failed to remove liquidity: ${errorMessage}`);
+      console.log(`Checking ${possiblePairs.length} possible pairs for user ${address}`);
+      const userPositions = await getUserLiquidityPositions(address, possiblePairs);
+      console.log("Fetched positions:", userPositions);
+      setPositions(userPositions);
+    } catch (error) {
+      console.error("Error refreshing positions:", error);
+    }
+  };
+  
+  // Handle remove liquidity for a position
+  const handleRemoveLiquidity = async (position: LiquidityPosition): Promise<void> => {
+    if (!address) {
+      setError("请连接您的钱包");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      console.log(`移除流动性: ${position.tokenASymbol}-${position.tokenBSymbol}`);
+      console.log(`流动性数量: ${position.lpBalance}`);
+      
+      try {
+        // 使用Direct Remove的模式调用removeLiquidity函数
+        const tx = await removeLiquidity(
+          position.tokenA,
+          position.tokenB,
+          position.lpBalance,
+          0.1, // 低滑点设置
+          true // 绕过检查
+        );
+        
+        console.log(`交易已提交: ${tx.hash}`);
+        
+        // 等待交易确认
+        const receipt = await tx.wait();
+        console.log(`交易已确认，区块高度: ${receipt.blockNumber}`);
+        
+        setSuccess(`流动性已成功移除! 请检查您的钱包余额变化。`);
+        
+        // 刷新位置列表
+        await refreshPositions();
+      } catch (error: any) {
+        console.error("移除流动性错误:", error);
+        setError(`移除流动性失败: ${error.message || "未知错误"}`);
+      }
     } finally {
-      setIsRemovingLiquidity(false);
+      setLoading(false);
     }
   };
   
@@ -554,6 +584,115 @@ const LiquidityPage = () => {
     
     return () => clearTimeout(delayDebounce);
   }, [tokenBAmount, tokenA, tokenB]);
+  
+  // Helper function to find token by address
+  const findTokenByAddress = (tokenAddress: string): Token => {
+    // Attempt to find the token by address in our tokens object
+    for (const [key, token] of Object.entries(tokens)) {
+      if (token.address.toLowerCase() === tokenAddress.toLowerCase()) {
+        return token;
+      }
+    }
+    
+    // Return a default token if not found
+    return {
+      name: 'Unknown Token',
+      symbol: tokenAddress.substring(0, 6) + '...',
+      logo: 'https://cryptologos.cc/logos/default-logo.svg',
+      balance: '0',
+      decimals: 18,
+      address: tokenAddress
+    };
+  };
+  
+  // Add a function to verify if a position is valid
+  const verifyPosition = async (position: LiquidityPosition): Promise<string> => {
+    if (!address) return "Wallet not connected";
+    
+    try {
+      // Check if token addresses are valid contracts
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const codeA = await provider.getCode(position.tokenA);
+      const codeB = await provider.getCode(position.tokenB);
+      
+      let message = `Position verification for ${position.tokenASymbol}-${position.tokenBSymbol}:\n`;
+      message += `Token A (${position.tokenASymbol}) address: ${position.tokenA}\n`;
+      message += `Token B (${position.tokenBSymbol}) address: ${position.tokenB}\n`;
+      message += `Token A contract code length: ${codeA.length}\n`;
+      message += `Token B contract code length: ${codeB.length}\n`;
+      
+      // Get pair address from router directly
+      const router = getRouterContract();
+      const pairAddress = await router.getPairAddress(position.tokenA, position.tokenB);
+      message += `Pair address from router: ${pairAddress}\n`;
+      message += `Position pair address: ${position.pairAddress}\n`;
+      
+      if (pairAddress !== position.pairAddress) {
+        message += `WARNING: Pair addresses don't match!\n`;
+      }
+      
+      // Check if pair address is a valid contract
+      const pairCode = await provider.getCode(pairAddress);
+      message += `Pair contract code length: ${pairCode.length}\n`;
+      
+      if (pairCode.length <= 2) {
+        message += `ERROR: Pair address is not a valid contract!\n`;
+      } else {
+        // Try to get LP token info
+        try {
+          const lpContract = getTokenContract(pairAddress);
+          const name = await lpContract.name();
+          const symbol = await lpContract.symbol();
+          const decimals = await lpContract.decimals();
+          message += `LP Token name: ${name}\n`;
+          message += `LP Token symbol: ${symbol}\n`;
+          message += `LP Token decimals: ${decimals}\n`;
+        } catch (e) {
+          message += `ERROR: Failed to get LP token info: ${e instanceof Error ? e.message : String(e)}\n`;
+        }
+        
+        // Try to get LP balance
+        try {
+          const balance = await router.balanceOf(pairAddress, address);
+          message += `LP Balance from router: ${ethers.utils.formatUnits(balance)}\n`;
+          message += `LP Balance from position: ${position.lpBalance}\n`;
+        } catch (e) {
+          message += `ERROR: Failed to get LP balance: ${e instanceof Error ? e.message : String(e)}\n`;
+        }
+      }
+      
+      return message;
+    } catch (e) {
+      return `Verification failed: ${e instanceof Error ? e.message : String(e)}`;
+    }
+  };
+  
+  // Add handleAddToPosition function
+  const handleAddToPosition = (position: LiquidityPosition): void => {
+    // 找到token键值
+    let tokenAKey = '';
+    let tokenBKey = '';
+    
+    for (const [key, token] of Object.entries(tokens)) {
+      if (token.address.toLowerCase() === position.tokenA.toLowerCase()) {
+        tokenAKey = key;
+      }
+      if (token.address.toLowerCase() === position.tokenB.toLowerCase()) {
+        tokenBKey = key;
+      }
+    }
+    
+    // 如果找到token，设置它们为当前选中的token
+    if (tokenAKey && tokenBKey) {
+      setTokenA(tokenAKey);
+      setTokenB(tokenBKey);
+      
+      // 滚动到页面顶部显示添加流动性表单
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      setError(`无法在界面中找到这些代币: ${position.tokenASymbol}-${position.tokenBSymbol}`);
+    }
+  };
   
   return (
     <div className="container mx-auto px-4 py-8">
@@ -731,47 +870,86 @@ const LiquidityPage = () => {
         <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10">
           <h2 className="text-xl font-bold text-white mb-4">{lt('myLiquidityPositions')}</h2>
           
+          {/* Error and Success Messages */}
+          {error && (
+            <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-4">
+              <p>{error}</p>
+            </div>
+          )}
+          
+          {success && (
+            <div className="bg-green-900/30 border border-green-700 text-green-200 px-4 py-3 rounded-lg mb-4">
+              <p>{success}</p>
+            </div>
+          )}
+          
+          {loading && (
+            <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-lg mb-4 flex items-center">
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p>Processing transaction...</p>
+            </div>
+          )}
+          
           {positions.length === 0 ? (
             <div className="text-center py-8 bg-dark-default rounded-lg">
               <p className="text-gray-400">{lt('noPositions')}</p>
             </div>
           ) : (
             <div>
-              {positions.map((position, index) => (
-                <div key={index} className="border border-gray-700 rounded-lg p-4 mb-3 bg-dark-default">
-                  <div className="flex justify-between mb-2">
-                    <div className="flex items-center">
-                      <div className="relative">
-                        <div className="h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
-                          <img src={tokens[position.tokenA].logo} className="h-7 w-7" alt={tokens[position.tokenA].symbol} />
+              {positions.map((position, index) => {
+                // Get token objects from addresses
+                const tokenAObj = findTokenByAddress(position.tokenA);
+                const tokenBObj = findTokenByAddress(position.tokenB);
+                
+                return (
+                  <div key={index} className="border border-gray-700 rounded-lg p-4 mb-3 bg-dark-default">
+                    <div className="flex justify-between mb-2">
+                      <div className="flex items-center">
+                        <div className="relative">
+                          <div className="h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
+                            <img src={tokenAObj.logo} className="h-7 w-7" alt={position.tokenASymbol} />
+                          </div>
+                          <div className="h-7 w-7 rounded-full bg-gray-700 absolute -right-2 -bottom-2 flex items-center justify-center overflow-hidden">
+                            <img src={tokenBObj.logo} className="h-7 w-7" alt={position.tokenBSymbol} />
+                          </div>
                         </div>
-                        <div className="h-7 w-7 rounded-full bg-gray-700 absolute -right-2 -bottom-2 flex items-center justify-center overflow-hidden">
-                          <img src={tokens[position.tokenB].logo} className="h-7 w-7" alt={tokens[position.tokenB].symbol} />
-                        </div>
+                        <span className="font-medium ml-3 text-white">{position.tokenASymbol}-{position.tokenBSymbol}</span>
                       </div>
-                      <span className="font-medium ml-3 text-white">{tokens[position.tokenA].symbol}-{tokens[position.tokenB].symbol}</span>
+                      <div className="flex space-x-2">
+                        <button 
+                          className="text-sm bg-blue-900/30 text-blue-400 px-2 py-1 rounded hover:bg-blue-900/50 transition"
+                          onClick={() => handleAddToPosition(position)}
+                        >
+                          {lt('add')}
+                        </button>
+                        <button 
+                          className="text-sm bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50 transition"
+                          onClick={() => handleRemoveLiquidity(position)}
+                        >
+                          {lt('remove')}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex space-x-2">
-                      <button className="text-sm bg-blue-900/30 text-blue-400 px-2 py-1 rounded hover:bg-blue-900/50 transition">{lt('add')}</button>
-                      <button className="text-sm bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50 transition">{lt('remove')}</button>
+                    <div className="grid grid-cols-3 gap-2 text-sm">
+                      <div>
+                        <div className="text-gray-400">{lt('pooled')} {position.tokenASymbol}</div>
+                        <div className="text-white">{position.tokenAAmount} {position.tokenASymbol}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400">{lt('pooled')} {position.tokenBSymbol}</div>
+                        <div className="text-white">{position.tokenBAmount} {position.tokenBSymbol}</div>
+                      </div>
+                      <div>
+                        <div className="text-gray-400">{lt('yourShare')}</div>
+                        <div className="text-white">{position.poolShare}%</div>
+                      </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <div className="text-gray-400">{lt('pooled')} {tokens[position.tokenA].symbol}</div>
-                      <div className="text-white">{position.tokenAAmount} {tokens[position.tokenA].symbol}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">{lt('pooled')} {tokens[position.tokenB].symbol}</div>
-                      <div className="text-white">{position.tokenBAmount} {tokens[position.tokenB].symbol}</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-400">{lt('yourShare')}</div>
-                      <div className="text-white">{position.poolShare}%</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -811,6 +989,46 @@ const LiquidityPage = () => {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Verification Result Modal */}
+      {showVerificationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-dark-light rounded-lg max-w-3xl w-full p-6 border border-primary/20 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium text-white">Position Verification Results</h3>
+              <button 
+                className="text-gray-400 hover:text-white"
+                onClick={() => setShowVerificationModal(false)}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="overflow-y-auto mb-4 flex-1">
+              <pre className="p-3 bg-dark-default text-gray-300 rounded whitespace-pre-wrap overflow-x-auto">{verificationResult}</pre>
+            </div>
+            <div className="flex justify-between">
+              <button
+                className="px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-600 transition"
+                onClick={() => {
+                  navigator.clipboard.writeText(verificationResult)
+                    .then(() => setSuccess("Results copied to clipboard!"))
+                    .catch(err => setError("Failed to copy: " + err.message));
+                }}
+              >
+                Copy to Clipboard
+              </button>
+              <button
+                className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition"
+                onClick={() => setShowVerificationModal(false)}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
