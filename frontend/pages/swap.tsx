@@ -764,18 +764,23 @@ const SwapPage = () => {
             </div>
           </div>
           
-          {/* Swap direction button */}
-          <div className="flex justify-center -my-2 z-10 relative">
+          {/* 交换方向按钮 - 已调整位置和大小 / Swap direction button - Position and size adjusted */}
+          <div className="flex justify-center my-4 z-10 relative">
             <button 
-              className="bg-dark-default p-2 rounded-full border border-primary/20 hover:border-primary transition-colors"
+              className="bg-dark-default p-3 rounded-full shadow-lg border border-primary/30 hover:border-primary transition-all transform hover:scale-110 active:scale-95 hover:shadow-glow-sm"
               onClick={handleSwapDirection}
+              aria-label="Swap direction"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-primary" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M16.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L12 13.586V6a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                <path fillRule="evenodd" d="M3.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 11-1.414 1.414L8 6.414V14a1 1 0 01-2 0V6.414L3.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-              </svg>
+              <div className="bg-gradient-to-r from-primary to-secondary rounded-full sm:w-10 sm:h-10 w-8 h-8 flex items-center justify-center">
+                {/* 更清晰、精致的箭头图标 / Cleaner, more polished arrow icon */}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 10l5 5 5-5" />
+                  <path d="M7 14l5-5 5 5" />
+                </svg>
+              </div>
             </button>
           </div>
+
           
           {/* To token input */}
           <div className="mb-6">
