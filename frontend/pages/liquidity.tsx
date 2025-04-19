@@ -66,6 +66,20 @@ interface LiquidityTranslation {
   yourShare: string;
   add: string;
   remove: string;
+  pleaseConnectWallet: string;
+  removingLiquidity: string;
+  liquidityAmount: string;
+  transactionSubmitted: string;
+  transactionConfirmed: string;
+  liquidityRemoved: string;
+  checkWalletBalance: string;
+  removeLiquidityError: string;
+  unknownError: string;
+  blockHeight: string;
+  approved: string;
+  error: string;
+  liquidityAdded: string;
+  success: string;
 }
 
 interface LiquidityTranslationsType {
@@ -185,7 +199,21 @@ const LiquidityPage = () => {
       pooled: 'Pooled',
       yourShare: 'Your Share',
       add: 'Add',
-      remove: 'Remove'
+      remove: 'Remove',
+      pleaseConnectWallet: 'Please connect your wallet',
+      removingLiquidity: 'Removing liquidity',
+      liquidityAmount: 'Liquidity amount',
+      transactionSubmitted: 'Transaction submitted',
+      transactionConfirmed: 'Transaction confirmed',
+      liquidityRemoved: 'Liquidity successfully removed!',
+      checkWalletBalance: 'Please check your wallet balance changes.',
+      removeLiquidityError: 'Remove liquidity failed',
+      unknownError: 'Unknown error',
+      blockHeight: 'Block height',
+      approved: 'approved',
+      error: 'Error',
+      liquidityAdded: 'Liquidity Added Successfully',
+      success: 'Success'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -205,7 +233,21 @@ const LiquidityPage = () => {
       pooled: '已存入',
       yourShare: '您的份额',
       add: '添加',
-      remove: '移除'
+      remove: '移除',
+      pleaseConnectWallet: '请连接您的钱包',
+      removingLiquidity: '移除流动性',
+      liquidityAmount: '流动性数量',
+      transactionSubmitted: '交易已提交',
+      transactionConfirmed: '交易已确认',
+      liquidityRemoved: '流动性已成功移除!',
+      checkWalletBalance: '请检查您的钱包余额变化。',
+      removeLiquidityError: '移除流动性失败',
+      unknownError: '未知错误',
+      blockHeight: '区块高度',
+      approved: '已批准',
+      error: '错误',
+      liquidityAdded: '流动性添加成功',
+      success: '成功'
     }
   };
   
@@ -406,10 +448,10 @@ const LiquidityPage = () => {
       
       // Wait for transaction to be mined
       await tx.wait();
-      alert(`${tokens[tokenA].symbol} approved for adding liquidity`);
+      setSuccess(`${tokens[tokenA].symbol} ${lt('approved')}`);
     } catch (error) {
       console.error('Error approving token A:', error);
-      alert(`Error approving token A: ${error instanceof Error ? error.message : String(error)}`);
+      setError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsApprovingA(false);
     }
@@ -425,10 +467,10 @@ const LiquidityPage = () => {
       
       // Wait for transaction to be mined
       await tx.wait();
-      alert(`${tokens[tokenB].symbol} approved for adding liquidity`);
+      setSuccess(`${tokens[tokenB].symbol} ${lt('approved')}`);
     } catch (error) {
       console.error('Error approving token B:', error);
-      alert(`Error approving token B: ${error instanceof Error ? error.message : String(error)}`);
+      setError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsApprovingB(false);
     }
@@ -437,12 +479,13 @@ const LiquidityPage = () => {
   // Handle add liquidity
   const handleAddLiquidity = async (): Promise<void> => {
     if (!isConnected) {
+      setError(lt('pleaseConnectWallet'));
       return;
     }
     
     if (!tokenAAmount || !tokenBAmount || 
         parseFloat(tokenAAmount) <= 0 || parseFloat(tokenBAmount) <= 0) {
-      alert('Please enter valid amounts for both tokens');
+      setError('Please enter valid amounts for both tokens');
       return;
     }
     
@@ -461,7 +504,7 @@ const LiquidityPage = () => {
       // Wait for transaction to be mined
       await tx.wait();
       
-      alert(`Successfully added ${tokenAAmount} ${tokens[tokenA].symbol} and ${tokenBAmount} ${tokens[tokenB].symbol} to the liquidity pool`);
+      setSuccess(lt('liquidityAdded'));
       
       // Reset form
       setTokenAAmount('');
@@ -484,7 +527,7 @@ const LiquidityPage = () => {
         }
       }
       
-      alert(`Failed to add liquidity: ${errorMessage}`);
+      setError(`${lt('error')}: ${errorMessage}`);
     } finally {
       setIsAddingLiquidity(false);
     }
@@ -524,7 +567,7 @@ const LiquidityPage = () => {
   // Handle remove liquidity for a position
   const handleRemoveLiquidity = async (position: LiquidityPosition): Promise<void> => {
     if (!address) {
-      setError("请连接您的钱包");
+      setError(lt('pleaseConnectWallet'));
       return;
     }
     
@@ -532,8 +575,8 @@ const LiquidityPage = () => {
       setLoading(true);
       setError(null);
       
-      console.log(`移除流动性: ${position.tokenASymbol}-${position.tokenBSymbol}`);
-      console.log(`流动性数量: ${position.lpBalance}`);
+      console.log(`${lt('removingLiquidity')}: ${position.tokenASymbol}-${position.tokenBSymbol}`);
+      console.log(`${lt('liquidityAmount')}: ${position.lpBalance}`);
       
       try {
         // 使用Direct Remove的模式调用removeLiquidity函数
@@ -545,19 +588,19 @@ const LiquidityPage = () => {
           true // 绕过检查
         );
         
-        console.log(`交易已提交: ${tx.hash}`);
+        console.log(`${lt('transactionSubmitted')}: ${tx.hash}`);
         
         // 等待交易确认
         const receipt = await tx.wait();
-        console.log(`交易已确认，区块高度: ${receipt.blockNumber}`);
+        console.log(`${lt('transactionConfirmed')}, ${lt('blockHeight')}: ${receipt.blockNumber}`);
         
-        setSuccess(`流动性已成功移除! 请检查您的钱包余额变化。`);
+        setSuccess(`${lt('liquidityRemoved')} ${lt('checkWalletBalance')}`);
         
         // 刷新位置列表
         await refreshPositions();
       } catch (error: any) {
-        console.error("移除流动性错误:", error);
-        setError(`移除流动性失败: ${error.message || "未知错误"}`);
+        console.error(`${lt('removeLiquidityError')}:`, error);
+        setError(`${lt('removeLiquidityError')}: ${error.message || lt('unknownError')}`);
       }
     } finally {
       setLoading(false);
@@ -693,7 +736,7 @@ const LiquidityPage = () => {
       setError(`无法在界面中找到这些代币: ${position.tokenASymbol}-${position.tokenBSymbol}`);
     }
   };
-  
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-md mx-auto">
@@ -872,24 +915,45 @@ const LiquidityPage = () => {
           
           {/* Error and Success Messages */}
           {error && (
-            <div className="bg-red-900/30 border border-red-700 text-red-200 px-4 py-3 rounded-lg mb-4">
-              <p>{error}</p>
+            <div className="bg-red-900/30 border border-red-700 rounded-lg mb-4 overflow-hidden">
+              <div className="bg-red-800/50 px-4 py-2 flex items-center border-b border-red-700">
+                <svg className="h-5 w-5 text-red-300 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+                <span className="font-medium text-red-200">{lt('error')}</span>
+              </div>
+              <div className="px-4 py-3 text-red-200">
+                <p>{error}</p>
+              </div>
             </div>
           )}
           
           {success && (
-            <div className="bg-green-900/30 border border-green-700 text-green-200 px-4 py-3 rounded-lg mb-4">
-              <p>{success}</p>
+            <div className="bg-green-900/30 border border-green-700 rounded-lg mb-4 overflow-hidden">
+              <div className="bg-green-800/50 px-4 py-2 flex items-center border-b border-green-700">
+                <svg className="h-5 w-5 text-green-300 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                <span className="font-medium text-green-200">{lt('success')}</span>
+              </div>
+              <div className="px-4 py-3 text-green-200">
+                <p>{success}</p>
+              </div>
             </div>
           )}
           
           {loading && (
-            <div className="bg-blue-900/30 border border-blue-700 text-blue-200 px-4 py-3 rounded-lg mb-4 flex items-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-200" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p>Processing transaction...</p>
+            <div className="bg-blue-900/30 border border-blue-700 rounded-lg mb-4 overflow-hidden">
+              <div className="bg-blue-800/50 px-4 py-2 flex items-center border-b border-blue-700">
+                <svg className="animate-spin h-5 w-5 text-blue-300 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span className="font-medium text-blue-200">Processing</span>
+              </div>
+              <div className="px-4 py-3 text-blue-200 flex items-center">
+                <p>{lt('removingLiquidity')}...</p>
+              </div>
             </div>
           )}
           
