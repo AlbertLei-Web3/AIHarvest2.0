@@ -80,6 +80,9 @@ interface LiquidityTranslation {
   error: string;
   liquidityAdded: string;
   success: string;
+  approving: string;
+  addingLiquidity: string;
+  processing: string;
 }
 
 interface LiquidityTranslationsType {
@@ -137,6 +140,30 @@ const tokensData: TokensType = {
     balance: '0',
     decimals: 18,
     address: TOKENS.FHBI
+  },
+  fhbi2: {
+    name: 'FHBI2 Token',
+    symbol: 'FHBI2',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI2
+  },
+  fhbi3: {
+    name: 'FHBI3 Token',
+    symbol: 'FHBI3',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI3
+  },
+  rtk: {
+    name: 'RTK Token',
+    symbol: 'RTK',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.RTK
   }
 };
 
@@ -176,6 +203,12 @@ const LiquidityPage = () => {
   const [showVerificationModal, setShowVerificationModal] = useState<boolean>(false);
   const [verificationResult, setVerificationResult] = useState<string>('');
   
+  // 添加通知弹窗状态
+  const [showNotification, setShowNotification] = useState<boolean>(false);
+  const [notificationType, setNotificationType] = useState<'success' | 'error' | 'loading'>('success');
+  const [notificationMessage, setNotificationMessage] = useState<string>('');
+  const [notificationTimeout, setNotificationTimeout] = useState<NodeJS.Timeout | null>(null);
+  
   const { address, isConnected } = useAccount();
   const { language, t } = useLanguage();
   
@@ -213,7 +246,10 @@ const LiquidityPage = () => {
       approved: 'approved',
       error: 'Error',
       liquidityAdded: 'Liquidity Added Successfully',
-      success: 'Success'
+      success: 'Success',
+      approving: 'Approving',
+      addingLiquidity: 'Adding liquidity',
+      processing: 'Processing'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -247,7 +283,10 @@ const LiquidityPage = () => {
       approved: '已批准',
       error: '错误',
       liquidityAdded: '流动性添加成功',
-      success: '成功'
+      success: '成功',
+      approving: '批准中',
+      addingLiquidity: '添加流动性中',
+      processing: '处理中'
     }
   };
   
@@ -444,14 +483,18 @@ const LiquidityPage = () => {
     
     try {
       setIsApprovingA(true);
+      showLoading(`${lt('approving')} ${tokens[tokenA].symbol}...`);
+      
       const tx = await approveToken(tokens[tokenA].address, tokenAAmount);
       
       // Wait for transaction to be mined
       await tx.wait();
-      setSuccess(`${tokens[tokenA].symbol} ${lt('approved')}`);
+      hideLoading();
+      showSuccess(`${tokens[tokenA].symbol} ${lt('approved')}`);
     } catch (error) {
       console.error('Error approving token A:', error);
-      setError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
+      hideLoading();
+      showError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsApprovingA(false);
     }
@@ -463,14 +506,18 @@ const LiquidityPage = () => {
     
     try {
       setIsApprovingB(true);
+      showLoading(`${lt('approving')} ${tokens[tokenB].symbol}...`);
+      
       const tx = await approveToken(tokens[tokenB].address, tokenBAmount);
       
       // Wait for transaction to be mined
       await tx.wait();
-      setSuccess(`${tokens[tokenB].symbol} ${lt('approved')}`);
+      hideLoading();
+      showSuccess(`${tokens[tokenB].symbol} ${lt('approved')}`);
     } catch (error) {
       console.error('Error approving token B:', error);
-      setError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
+      hideLoading();
+      showError(`${lt('error')}: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setIsApprovingB(false);
     }
@@ -479,18 +526,19 @@ const LiquidityPage = () => {
   // Handle add liquidity
   const handleAddLiquidity = async (): Promise<void> => {
     if (!isConnected) {
-      setError(lt('pleaseConnectWallet'));
+      showError(lt('pleaseConnectWallet'));
       return;
     }
     
     if (!tokenAAmount || !tokenBAmount || 
         parseFloat(tokenAAmount) <= 0 || parseFloat(tokenBAmount) <= 0) {
-      setError('Please enter valid amounts for both tokens');
+      showError('Please enter valid amounts for both tokens');
       return;
     }
     
     try {
       setIsAddingLiquidity(true);
+      showLoading(lt('addingLiquidity'));
       
       // Execute add liquidity
       const tx = await addLiquidity(
@@ -504,7 +552,8 @@ const LiquidityPage = () => {
       // Wait for transaction to be mined
       await tx.wait();
       
-      setSuccess(lt('liquidityAdded'));
+      hideLoading();
+      showSuccess(lt('liquidityAdded'));
       
       // Reset form
       setTokenAAmount('');
@@ -516,6 +565,8 @@ const LiquidityPage = () => {
       
     } catch (error) {
       console.error('Error during adding liquidity:', error);
+      hideLoading();
+      
       let errorMessage = 'An unexpected error occurred';
       
       if (error instanceof Error) {
@@ -527,7 +578,7 @@ const LiquidityPage = () => {
         }
       }
       
-      setError(`${lt('error')}: ${errorMessage}`);
+      showError(`${lt('error')}: ${errorMessage}`);
     } finally {
       setIsAddingLiquidity(false);
     }
@@ -567,13 +618,13 @@ const LiquidityPage = () => {
   // Handle remove liquidity for a position
   const handleRemoveLiquidity = async (position: LiquidityPosition): Promise<void> => {
     if (!address) {
-      setError(lt('pleaseConnectWallet'));
+      showError(lt('pleaseConnectWallet'));
       return;
     }
     
     try {
-      setLoading(true);
-      setError(null);
+      setIsRemovingLiquidity(true);
+      showLoading(`${lt('removingLiquidity')} ${position.tokenASymbol}-${position.tokenBSymbol}...`);
       
       console.log(`${lt('removingLiquidity')}: ${position.tokenASymbol}-${position.tokenBSymbol}`);
       console.log(`${lt('liquidityAmount')}: ${position.lpBalance}`);
@@ -594,16 +645,18 @@ const LiquidityPage = () => {
         const receipt = await tx.wait();
         console.log(`${lt('transactionConfirmed')}, ${lt('blockHeight')}: ${receipt.blockNumber}`);
         
-        setSuccess(`${lt('liquidityRemoved')} ${lt('checkWalletBalance')}`);
+        hideLoading();
+        showSuccess(`${lt('liquidityRemoved')} ${lt('checkWalletBalance')}`);
         
         // 刷新位置列表
         await refreshPositions();
       } catch (error: any) {
         console.error(`${lt('removeLiquidityError')}:`, error);
-        setError(`${lt('removeLiquidityError')}: ${error.message || lt('unknownError')}`);
+        hideLoading();
+        showError(`${lt('removeLiquidityError')}: ${error.message || lt('unknownError')}`);
       }
     } finally {
-      setLoading(false);
+      setIsRemovingLiquidity(false);
     }
   };
   
@@ -733,12 +786,131 @@ const LiquidityPage = () => {
       // 滚动到页面顶部显示添加流动性表单
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
-      setError(`无法在界面中找到这些代币: ${position.tokenASymbol}-${position.tokenBSymbol}`);
+      showError(`无法在界面中找到这些代币: ${position.tokenASymbol}-${position.tokenBSymbol}`);
     }
+  };
+
+  // 创建一个新的显示通知的函数
+  const showNotificationMessage = (type: 'success' | 'error' | 'loading', message: string, duration: number = 5000) => {
+    // 清除之前的超时
+    if (notificationTimeout) {
+      clearTimeout(notificationTimeout);
+    }
+    
+    // 设置新的通知
+    setNotificationType(type);
+    setNotificationMessage(message);
+    setShowNotification(true);
+    
+    // 如果不是加载类型且持续时间大于0，则设置自动关闭
+    if (type !== 'loading' && duration > 0) {
+      const timeout = setTimeout(() => {
+        setShowNotification(false);
+      }, duration);
+      setNotificationTimeout(timeout);
+    }
+  };
+
+  // 关闭通知的函数
+  const closeNotification = () => {
+    setShowNotification(false);
+    if (notificationTimeout) {
+      clearTimeout(notificationTimeout);
+      setNotificationTimeout(null);
+    }
+  };
+
+  // 修改原有的setError、setSuccess和setLoading函数
+  const showError = (message: string) => {
+    setError(message); // 保留原有状态以便与其他代码兼容
+    showNotificationMessage('error', message);
+  };
+
+  const showSuccess = (message: string) => {
+    setSuccess(message); // 保留原有状态以便与其他代码兼容
+    showNotificationMessage('success', message);
+  };
+
+  const showLoading = (message: string) => {
+    setLoading(true); // 保留原有状态以便与其他代码兼容
+    showNotificationMessage('loading', message, 0); // 持续时间为0表示不自动关闭
+  };
+
+  const hideLoading = () => {
+    setLoading(false);
+    setShowNotification(false);
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* 全局通知组件 */}
+      {showNotification && (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+          <div className={`max-w-md w-full p-4 rounded-lg shadow-xl border ${
+            notificationType === 'success' ? 'bg-green-900/80 border-green-500' : 
+            notificationType === 'error' ? 'bg-red-900/80 border-red-500' : 
+            'bg-blue-900/80 border-blue-500'
+          }`}>
+            <div className="flex items-start">
+              <div className="flex-shrink-0 pt-0.5">
+                {notificationType === 'success' && (
+                  <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                
+                {notificationType === 'error' && (
+                  <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+                
+                {notificationType === 'loading' && (
+                  <svg className="animate-spin h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                )}
+              </div>
+              
+              <div className="ml-3 w-0 flex-1">
+                <p className={`text-sm font-medium ${
+                  notificationType === 'success' ? 'text-green-200' : 
+                  notificationType === 'error' ? 'text-red-200' : 
+                  'text-blue-200'
+                }`}>
+                  {notificationType === 'success' ? lt('success') : 
+                   notificationType === 'error' ? lt('error') : 
+                   lt('processing')}
+                </p>
+                <p className={`mt-1 text-sm ${
+                  notificationType === 'success' ? 'text-green-300' : 
+                  notificationType === 'error' ? 'text-red-300' : 
+                  'text-blue-300'
+                }`}>
+                  {notificationMessage}
+                </p>
+              </div>
+              
+              <div className="ml-4 flex-shrink-0 flex">
+                <button
+                  onClick={closeNotification}
+                  className={`inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                    notificationType === 'success' ? 'text-green-400 hover:text-green-300 focus:ring-green-500' : 
+                    notificationType === 'error' ? 'text-red-400 hover:text-red-300 focus:ring-red-500' : 
+                    'text-blue-400 hover:text-blue-300 focus:ring-blue-500'
+                  }`}
+                >
+                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-md mx-auto">
         {/* Add Liquidity Card */}
         <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10 mb-6">
@@ -913,50 +1085,6 @@ const LiquidityPage = () => {
         <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10">
           <h2 className="text-xl font-bold text-white mb-4">{lt('myLiquidityPositions')}</h2>
           
-          {/* Error and Success Messages */}
-          {error && (
-            <div className="bg-red-900/30 border border-red-700 rounded-lg mb-4 overflow-hidden">
-              <div className="bg-red-800/50 px-4 py-2 flex items-center border-b border-red-700">
-                <svg className="h-5 w-5 text-red-300 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium text-red-200">{lt('error')}</span>
-              </div>
-              <div className="px-4 py-3 text-red-200">
-                <p>{error}</p>
-              </div>
-            </div>
-          )}
-          
-          {success && (
-            <div className="bg-green-900/30 border border-green-700 rounded-lg mb-4 overflow-hidden">
-              <div className="bg-green-800/50 px-4 py-2 flex items-center border-b border-green-700">
-                <svg className="h-5 w-5 text-green-300 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="font-medium text-green-200">{lt('success')}</span>
-              </div>
-              <div className="px-4 py-3 text-green-200">
-                <p>{success}</p>
-              </div>
-            </div>
-          )}
-          
-          {loading && (
-            <div className="bg-blue-900/30 border border-blue-700 rounded-lg mb-4 overflow-hidden">
-              <div className="bg-blue-800/50 px-4 py-2 flex items-center border-b border-blue-700">
-                <svg className="animate-spin h-5 w-5 text-blue-300 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span className="font-medium text-blue-200">Processing</span>
-              </div>
-              <div className="px-4 py-3 text-blue-200 flex items-center">
-                <p>{lt('removingLiquidity')}...</p>
-              </div>
-            </div>
-          )}
-          
           {positions.length === 0 ? (
             <div className="text-center py-8 bg-dark-default rounded-lg">
               <p className="text-gray-400">{lt('noPositions')}</p>
@@ -1081,8 +1209,8 @@ const LiquidityPage = () => {
                 className="px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-600 transition"
                 onClick={() => {
                   navigator.clipboard.writeText(verificationResult)
-                    .then(() => setSuccess("Results copied to clipboard!"))
-                    .catch(err => setError("Failed to copy: " + err.message));
+                    .then(() => showSuccess("Results copied to clipboard!"))
+                    .catch(err => showError("Failed to copy: " + err.message));
                 }}
               >
                 Copy to Clipboard
