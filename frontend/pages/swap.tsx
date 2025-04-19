@@ -2,7 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import Image from 'next/image';
-import { TOKENS, getTokenBalance, getSwapQuote, executeSwap, approveToken } from '@/utils/contracts';
+import { 
+  TOKENS, 
+  getTokenBalance, 
+  getSwapQuote, 
+  executeSwap, 
+  approveToken,
+  getPairReserves,
+  getRouterContract
+} from '@/utils/contracts';
 import { ethers } from 'ethers';
 
 interface Token {
@@ -22,6 +30,11 @@ interface ExchangeRatesType {
   [key: string]: number;
 }
 
+interface Notification {
+  type: NotificationType;
+  message: string;
+}
+
 interface SwapTranslation {
   swap: string;
   from: string;
@@ -35,6 +48,13 @@ interface SwapTranslation {
   selectToken: string;
   searchPlaceholder: string;
   settings: string;
+  approving: string;
+  swapping: string;
+  approved: string;
+  swapSuccess: string;
+  swapError: string;
+  approveError: string;
+  close: string;
 }
 
 interface SwapTranslationsType {
@@ -43,7 +63,7 @@ interface SwapTranslationsType {
   [key: string]: SwapTranslation;
 }
 
-// Update token data to include contract addresses
+// Token data 
 const tokensData: TokensType = {
   eth: {
     name: 'Ethereum',
@@ -76,6 +96,46 @@ const tokensData: TokensType = {
     balance: '0',
     decimals: 18,
     address: TOKENS.DAI
+  },
+  td: {
+    name: 'TD Token',
+    symbol: 'TD',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.TD
+  },
+  fhbi: {
+    name: 'FHBI Token',
+    symbol: 'FHBI',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI
+  },
+  fhbi2: {
+    name: 'FHBI2 Token',
+    symbol: 'FHBI2',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI2
+  },
+  fhbi3: {
+    name: 'FHBI3 Token',
+    symbol: 'FHBI3',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.FHBI3
+  },
+  rtk: {
+    name: 'RTK Token',
+    symbol: 'RTK',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: '0',
+    decimals: 18,
+    address: TOKENS.RTK
   }
 };
 
@@ -88,6 +148,9 @@ const exchangeRates: ExchangeRatesType = {
   'aih_dai': 1.8,
   'usdt_dai': 1
 };
+
+// Add notification types
+type NotificationType = 'success' | 'error' | 'loading' | null;
 
 const SwapPage = () => {
   const [tokens, setTokens] = useState<TokensType>(tokensData);
@@ -105,9 +168,14 @@ const SwapPage = () => {
   const [exchangeRate, setExchangeRate] = useState<string>('0');
   const [priceImpact, setPriceImpact] = useState<string>('0');
   const [mounted, setMounted] = useState<boolean>(false);
+  const [availablePairs, setAvailablePairs] = useState<{from: string, to: string}[]>([]);
+  const [filteredTokens, setFilteredTokens] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>('');
   
   const { address, isConnected } = useAccount();
   const { language, t } = useLanguage();
+  
+  const [notification, setNotification] = useState<Notification | null>(null);
   
   // Translations for the swap page
   const swapTranslations: SwapTranslationsType = {
@@ -124,6 +192,13 @@ const SwapPage = () => {
       selectToken: 'Select Token',
       searchPlaceholder: 'Search token name or address',
       settings: 'Settings',
+      approving: 'Approving...',
+      swapping: 'Swapping...',
+      approved: 'Token approved successfully',
+      swapSuccess: 'Swap completed successfully',
+      swapError: 'Swap failed',
+      approveError: 'Approval failed',
+      close: 'Close'
     },
     zh: {
       swap: '交换',
@@ -138,6 +213,13 @@ const SwapPage = () => {
       selectToken: '选择代币',
       searchPlaceholder: '搜索代币名称或地址',
       settings: '设置',
+      approving: '正在授权...',
+      swapping: '正在交换...',
+      approved: '代币授权成功',
+      swapSuccess: '交换成功完成',
+      swapError: '交换失败',
+      approveError: '授权失败',
+      close: '关闭'
     }
   };
   
@@ -151,6 +233,151 @@ const SwapPage = () => {
   useEffect(() => {
     setMounted(true);
   }, []);
+  
+  // Fetch available pairs with liquidity
+  useEffect(() => {
+    const fetchAvailablePairs = async () => {
+      try {
+        if (!mounted) return;
+        
+        console.log('Fetching available pairs with liquidity...');
+        const router = getRouterContract();
+        
+        // Create all possible token pairs from our tokens
+        const tokenAddresses = Object.values(tokens).map(token => token.address);
+        const pairs: {from: string, to: string}[] = [];
+        const tokensWithLiquidity = new Set<string>();
+        
+        // Check each pair combination for liquidity
+        for (let i = 0; i < tokenAddresses.length; i++) {
+          for (let j = i + 1; j < tokenAddresses.length; j++) {
+            try {
+              const tokenA = tokenAddresses[i];
+              const tokenB = tokenAddresses[j];
+              
+              // Get pair address
+              const pairAddress = await router.getPairAddress(tokenA, tokenB);
+              
+              if (pairAddress !== ethers.constants.AddressZero) {
+                // Pair exists, check if it has liquidity
+                const [reserveA, reserveB] = await getPairReserves(tokenA, tokenB);
+                
+                if (parseFloat(reserveA) > 0 && parseFloat(reserveB) > 0) {
+                  console.log(`Found pair with liquidity: ${tokenA} - ${tokenB}`);
+                  pairs.push({ from: tokenA, to: tokenB });
+                  tokensWithLiquidity.add(tokenA.toLowerCase());
+                  tokensWithLiquidity.add(tokenB.toLowerCase());
+                }
+              }
+            } catch (err) {
+              console.error(`Error checking pair ${tokenAddresses[i]} - ${tokenAddresses[j]}:`, err);
+            }
+          }
+        }
+        
+        setAvailablePairs(pairs);
+        
+        // Filter tokens that have liquidity
+        const filteredTokenIds = Object.keys(tokens).filter(tokenId => 
+          tokensWithLiquidity.has(tokens[tokenId].address.toLowerCase())
+        );
+        
+        if (filteredTokenIds.length > 0) {
+          setFilteredTokens(filteredTokenIds);
+          // Set initial token selection to first available pair
+          if (pairs.length > 0) {
+            // Find corresponding token ids for the first pair
+            const fromTokenId = findTokenIdByAddress(pairs[0].from);
+            const toTokenId = findTokenIdByAddress(pairs[0].to);
+            
+            if (fromTokenId && toTokenId) {
+              setFromToken(fromTokenId);
+              setToToken(toTokenId);
+            }
+          }
+        } else {
+          // If no tokens with liquidity found, keep all tokens available
+          setFilteredTokens(Object.keys(tokens));
+        }
+      } catch (error) {
+        console.error('Error fetching available pairs:', error);
+        // If an error occurs, keep all tokens available
+        setFilteredTokens(Object.keys(tokens));
+      }
+    };
+    
+    if (mounted) {
+      fetchAvailablePairs();
+    }
+  }, [mounted]);
+  
+  // Find token ID by address
+  const findTokenIdByAddress = (address: string): string | undefined => {
+    const normalized = address.toLowerCase();
+    for (const [tokenId, token] of Object.entries(tokens)) {
+      if (token.address.toLowerCase() === normalized) {
+        return tokenId;
+      }
+    }
+    return undefined;
+  };
+  
+  // Check if a pair has liquidity
+  const hasPairLiquidity = (from: string, to: string): boolean => {
+    if (availablePairs.length === 0) return true; // Default to true if we haven't loaded pairs yet
+    
+    const fromAddress = tokens[from].address.toLowerCase();
+    const toAddress = tokens[to].address.toLowerCase();
+    
+    return availablePairs.some(
+      pair => 
+        (pair.from.toLowerCase() === fromAddress && pair.to.toLowerCase() === toAddress) ||
+        (pair.from.toLowerCase() === toAddress && pair.to.toLowerCase() === fromAddress)
+    );
+  };
+  
+  // Filter tokens for display in modal
+  const getFilteredModalTokens = (): string[] => {
+    // If we're selecting the 'from' token, filter tokens that have pairs with any other token
+    if (currentSelector === 'from') {
+      if (searchQuery) {
+        return filteredTokens.filter(id => 
+          tokens[id].name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          tokens[id].symbol.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      return filteredTokens;
+    }
+    
+    // If we're selecting the 'to' token, only show tokens that have a pair with the selected 'from' token
+    if (currentSelector === 'to') {
+      const hasLiquidityWithFrom = (tokenId: string): boolean => {
+        if (availablePairs.length === 0) return true; // Default to true if we haven't loaded pairs yet
+        
+        const fromAddress = tokens[fromToken].address.toLowerCase();
+        const tokenAddress = tokens[tokenId].address.toLowerCase();
+        
+        return availablePairs.some(
+          pair => 
+            (pair.from.toLowerCase() === fromAddress && pair.to.toLowerCase() === tokenAddress) ||
+            (pair.from.toLowerCase() === tokenAddress && pair.to.toLowerCase() === fromAddress)
+        );
+      };
+      
+      const tokensList = filteredTokens.filter(id => id !== fromToken && hasLiquidityWithFrom(id));
+      
+      if (searchQuery) {
+        return tokensList.filter(id => 
+          tokens[id].name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+          tokens[id].symbol.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      }
+      
+      return tokensList;
+    }
+    
+    return [];
+  };
   
   // Fetch token balances when connected
   useEffect(() => {
@@ -191,6 +418,7 @@ const SwapPage = () => {
       const fromTokenAddress = tokens[fromToken].address;
       const toTokenAddress = tokens[toToken].address;
       
+      // Get the swap quote from the router
       const amountOut = await getSwapQuote(
         fromTokenAddress,
         toTokenAddress,
@@ -200,16 +428,37 @@ const SwapPage = () => {
       setToAmount(amountOut);
       
       // Calculate exchange rate (1 fromToken = X toToken)
-      const rate = parseFloat(amountOut) / parseFloat(fromAmount);
-      setExchangeRate(rate.toFixed(6));
+      if (parseFloat(amountOut) > 0) {
+        const rate = parseFloat(amountOut) / parseFloat(fromAmount);
+        setExchangeRate(rate.toFixed(6));
+        
+        // Get pair reserves to calculate price impact
+        const [reserveFrom, reserveTo] = await getPairReserves(
+          fromTokenAddress,
+          toTokenAddress
+        );
+        
+        // Calculate price impact
+        // Price impact = (spot price - execution price) / spot price * 100
+        const spotPrice = parseFloat(reserveTo) / parseFloat(reserveFrom);
+        const executionPrice = parseFloat(amountOut) / parseFloat(fromAmount);
+        
+        let impact = 0;
+        if (spotPrice > 0) {
+          impact = Math.abs((spotPrice - executionPrice) / spotPrice * 100);
+        }
+        
+        setPriceImpact(impact.toFixed(2));
+      } else {
+        setExchangeRate('0');
+        setPriceImpact('0');
+      }
       
-      // Placeholder for price impact calculation (in a real app, would be more complex)
-      setPriceImpact('0.5'); // Assuming 0.5% impact for now
-      
-      setShowExchangeInfo(true);
+      setShowExchangeInfo(Boolean(parseFloat(amountOut) > 0));
     } catch (error) {
       console.error('Error calculating swap:', error);
       setToAmount('');
+      setShowExchangeInfo(false);
     } finally {
       setTransactionPending(false);
     }
@@ -248,20 +497,52 @@ const SwapPage = () => {
     setShowTokenModal(false);
   };
   
+  // Show notification
+  const showNotification = (type: NotificationType, message: string) => {
+    setNotification({ type, message });
+    
+    // Auto-dismiss success and error notifications after 5 seconds
+    if (type === 'success' || type === 'error') {
+      setTimeout(() => {
+        setNotification(null);
+      }, 5000);
+    }
+  };
+  
+  // Hide notification
+  const hideNotification = () => {
+    setNotification(null);
+  };
+  
   // Handle approve token
   const handleApprove = async (): Promise<void> => {
     if (!isConnected || !fromAmount) return;
     
     try {
       setIsApproving(true);
-      const tx = await approveToken(tokens[fromToken].address, fromAmount);
+      showNotification('loading', st('approving'));
+      
+      const fromTokenAddress = tokens[fromToken].address;
+      console.log(`Approving ${fromAmount} ${tokens[fromToken].symbol} (${fromTokenAddress})...`);
+      
+      // Call approve function
+      const tx = await approveToken(fromTokenAddress, fromAmount);
+      console.log(`Approval transaction submitted: ${tx.hash}`);
       
       // Wait for transaction to be mined
-      await tx.wait();
-      alert(`${tokens[fromToken].symbol} approved for swapping`);
+      const receipt = await tx.wait();
+      console.log(`Approval confirmed in block ${receipt.blockNumber}`);
+      
+      showNotification('success', st('approved'));
     } catch (error) {
       console.error('Error approving token:', error);
-      alert(`Error approving token: ${error instanceof Error ? error.message : String(error)}`);
+      let errorMessage = st('approveError');
+      
+      if (error instanceof Error) {
+        errorMessage = `${st('approveError')}: ${error.message}`;
+      }
+      
+      showNotification('error', errorMessage);
     } finally {
       setIsApproving(false);
     }
@@ -270,32 +551,42 @@ const SwapPage = () => {
   // Handle swap button click
   const handleSwap = async (): Promise<void> => {
     if (!isConnected) {
+      showNotification('error', st('walletWarning'));
       return;
     }
     
     if (!fromAmount || parseFloat(fromAmount) <= 0) {
-      alert('Please enter an amount to swap');
+      showNotification('error', 'Please enter an amount to swap');
       return;
     }
     
     try {
       setIsSwapping(true);
+      showNotification('loading', st('swapping'));
+      
+      const fromTokenAddress = tokens[fromToken].address;
+      const toTokenAddress = tokens[toToken].address;
       
       // Calculate minimum output amount based on slippage
       const minOutputAmount = (parseFloat(toAmount) * (1 - slippage / 100)).toFixed(6);
+      console.log(`Swapping ${fromAmount} ${tokens[fromToken].symbol} for minimum ${minOutputAmount} ${tokens[toToken].symbol}...`);
       
       // Execute swap
       const tx = await executeSwap(
-        tokens[fromToken].address,
-        tokens[toToken].address,
+        fromTokenAddress,
+        toTokenAddress,
         fromAmount,
         minOutputAmount
       );
       
-      // Wait for transaction to be mined
-      await tx.wait();
+      console.log(`Swap transaction submitted: ${tx.hash}`);
       
-      alert(`Successfully swapped ${fromAmount} ${tokens[fromToken].symbol} for ${toAmount} ${tokens[toToken].symbol}`);
+      // Wait for transaction to be mined
+      const receipt = await tx.wait();
+      console.log(`Swap confirmed in block ${receipt.blockNumber}`);
+      
+      const successMessage = `${st('swapSuccess')}: ${fromAmount} ${tokens[fromToken].symbol} → ${toAmount} ${tokens[toToken].symbol}`;
+      showNotification('success', successMessage);
       
       // Reset form
       setFromAmount('');
@@ -303,21 +594,34 @@ const SwapPage = () => {
       setShowExchangeInfo(false);
       
       // Refresh balances after swap
-      // We'll rely on the useEffect interval to update balances
+      const updatedTokens = { ...tokens };
+      
+      for (const [key, token] of Object.entries(tokens)) {
+        try {
+          if (key === fromToken || key === toToken) {
+            const balance = await getTokenBalance(token.address, address!);
+            updatedTokens[key] = { ...token, balance };
+          }
+        } catch (error) {
+          console.error(`Error fetching balance for ${token.symbol}:`, error);
+        }
+      }
+      
+      setTokens(updatedTokens);
     } catch (error) {
       console.error('Error during swap:', error);
-      let errorMessage = 'An unexpected error occurred';
+      let errorMessage = st('swapError');
       
       if (error instanceof Error) {
         // Check if it's an allowance error
         if (error.message.includes('allowance')) {
-          errorMessage = 'Please approve the token first';
+          errorMessage = `${st('swapError')}: Please approve the token first`;
         } else {
-          errorMessage = error.message;
+          errorMessage = `${st('swapError')}: ${error.message}`;
         }
       }
       
-      alert(`Swap failed: ${errorMessage}`);
+      showNotification('error', errorMessage);
     } finally {
       setIsSwapping(false);
     }
@@ -336,6 +640,41 @@ const SwapPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Global Notification */}
+      {notification && (
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          <div className="absolute inset-0 bg-black bg-opacity-50" onClick={hideNotification}></div>
+          <div className={`relative bg-dark-lighter p-5 rounded-lg shadow-lg max-w-md w-full text-center ${
+            notification.type === 'error' ? 'border-2 border-red-500' :
+            notification.type === 'success' ? 'border-2 border-green-500' :
+            'border border-primary/20'
+          }`}>
+            {notification.type === 'loading' && (
+              <div className="animate-spin h-10 w-10 rounded-full border-t-2 border-primary mx-auto mb-3"></div>
+            )}
+            
+            {notification.type === 'success' && (
+              <div className="text-green-500 text-3xl mb-3">✓</div>
+            )}
+            
+            {notification.type === 'error' && (
+              <div className="text-red-500 text-3xl mb-3">×</div>
+            )}
+            
+            <div className="text-white mb-4">{notification.message}</div>
+            
+            {notification.type !== 'loading' && (
+              <button 
+                className="text-gray-400 hover:text-white border border-gray-600 hover:border-white px-4 py-2 rounded-lg"
+                onClick={hideNotification}
+              >
+                {st('close')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+  
       <div className="max-w-md mx-auto">
         <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10">
           <div className="flex items-center justify-between mb-6">
@@ -550,8 +889,17 @@ const SwapPage = () => {
                   </svg>
                 </button>
               </div>
+              
+              <input 
+                type="text" 
+                className="w-full p-3 bg-dark-default border border-gray-700 rounded-lg mb-4 text-white"
+                placeholder={st('searchPlaceholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              
               <div className="space-y-3">
-                {Object.entries(tokens).map(([id, token]) => (
+                {getFilteredModalTokens().map((id) => (
                   <div 
                     key={id}
                     className={`flex items-center p-3 rounded-lg cursor-pointer hover:bg-dark-default ${
@@ -569,21 +917,27 @@ const SwapPage = () => {
                   >
                     <div className="w-8 h-8 relative mr-3">
                       <Image 
-                        src={token.logo}
-                        alt={token.symbol}
+                        src={tokens[id].logo}
+                        alt={tokens[id].symbol}
                         width={32}
                         height={32}
                       />
                     </div>
                     <div>
-                      <div className="text-white font-medium">{token.symbol}</div>
-                      <div className="text-gray-400 text-sm">{token.name}</div>
+                      <div className="text-white font-medium">{tokens[id].symbol}</div>
+                      <div className="text-gray-400 text-sm">{tokens[id].name}</div>
                     </div>
                     <div className="ml-auto text-right">
-                      <div className="text-white">{token.balance}</div>
+                      <div className="text-white">{tokens[id].balance}</div>
                     </div>
                   </div>
                 ))}
+                
+                {getFilteredModalTokens().length === 0 && (
+                  <div className="text-center text-gray-400 py-4">
+                    {searchQuery ? 'No tokens match your search' : 'No tokens with liquidity found'}
+                  </div>
+                )}
               </div>
             </div>
           </div>
