@@ -311,8 +311,10 @@ export const getPairReserves = async (
     
     // Get pair address 获取代币对地址
     const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+    console.log(`Getting reserves for pair at address: ${pairAddress}`);
     
     if (pairAddress === ethers.constants.AddressZero) {
+      console.log(`Pair does not exist. Returning zero reserves.`);
       return ["0", "0"];
     }
     
@@ -328,10 +330,21 @@ export const getPairReserves = async (
     const tokenADecimals = await tokenAContract.decimals();
     const tokenBDecimals = await tokenBContract.decimals();
     
-    return [
-      ethers.utils.formatUnits(reserveA, tokenADecimals),
-      ethers.utils.formatUnits(reserveB, tokenBDecimals)
-    ];
+    // Check if reserves are very small
+    if (reserveA.isZero() || reserveB.isZero() || 
+        (reserveA.lt(ethers.utils.parseUnits("0.000001", 18)) && 
+         reserveB.lt(ethers.utils.parseUnits("0.000001", 18)))) {
+      console.log(`Reserves are too small to be meaningful. Returning zero reserves.`);
+      console.log(`Actual reserves - A: ${reserveA.toString()}, B: ${reserveB.toString()}`);
+      return ["0", "0"];
+    }
+    
+    const formattedReserveA = ethers.utils.formatUnits(reserveA, tokenADecimals);
+    const formattedReserveB = ethers.utils.formatUnits(reserveB, tokenBDecimals);
+    
+    console.log(`Reserves - A: ${formattedReserveA}, B: ${formattedReserveB}`);
+    
+    return [formattedReserveA, formattedReserveB];
   } catch (error) {
     console.error("Error getting pair reserves:", error);
     return ["0", "0"];
@@ -420,6 +433,7 @@ export const calculateLPTokenAmount = async (
     
     // Get pair address 获取代币对地址
     const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+    console.log(`Calculating LP tokens for pair at address: ${pairAddress}`);
     
     if (pairAddress === ethers.constants.AddressZero) {
       // First LP provider gets sqrt(amountA * amountB) LP tokens 第一个LP提供者获得sqrt(amountA * amountB) LP代币
@@ -435,6 +449,7 @@ export const calculateLPTokenAmount = async (
         parseFloat(amountADesired) * parseFloat(amountBDesired)
       ).toString();
       
+      console.log(`New pair LP token calculation: sqrt(${amountADesired} * ${amountBDesired}) = ${lpTokenAmount}`);
       return lpTokenAmount;
     } else {
       // Get reserves 获取储备量
@@ -446,12 +461,26 @@ export const calculateLPTokenAmount = async (
       
       const totalSupply = await router.totalSupply(pairAddress);
       
+      console.log(`Existing pair: ReserveA=${reserveA.toString()}, ReserveB=${reserveB.toString()}, TotalSupply=${totalSupply.toString()}`);
+      
+      // If reserves are zero or very low but totalSupply exists, treat as new pair
+      if (reserveA.isZero() || reserveB.isZero() || 
+          (reserveA.lt(ethers.utils.parseUnits("0.000001", 18)) && reserveB.lt(ethers.utils.parseUnits("0.000001", 18)))) {
+        console.log(`Reserves are too low or zero. Treating as new pair.`);
+        const lpTokenAmount = Math.sqrt(
+          parseFloat(amountADesired) * parseFloat(amountBDesired)
+        ).toString();
+        console.log(`New pair LP token calculation: sqrt(${amountADesired} * ${amountBDesired}) = ${lpTokenAmount}`);
+        return lpTokenAmount;
+      }
+      
       const tokenAContract = getTokenContract(tokenAAddress);
       const tokenADecimals = await tokenAContract.decimals();
       const amountAWei = ethers.utils.parseUnits(amountADesired, tokenADecimals);
       
       // LP tokens = totalSupply * amountA / reserveA LP代币 = 总供应量 * amountA / 储备量
       const lpTokenAmount = totalSupply.mul(amountAWei).div(reserveA);
+      console.log(`LP token calculation: ${totalSupply.toString()} * ${amountAWei.toString()} / ${reserveA.toString()} = ${lpTokenAmount.toString()}`);
       
       return ethers.utils.formatUnits(lpTokenAmount, 18);
     }
@@ -802,7 +831,8 @@ export const getUserLiquidityPositions = async (
         const totalSupply = await router.totalSupply(pairAddress);
         
         // Calculate share of pool 计算池子份额
-        const poolShare = lpBalance.mul(ethers.BigNumber.from("100")).div(totalSupply);
+        const poolShare = lpBalance.mul(ethers.BigNumber.from("10000")).div(totalSupply);
+        console.log(`Pool share calculation: (${lpBalance.toString()} / ${totalSupply.toString()}) * 100 = ${poolShare.toNumber() / 100}%`);
         
         // Calculate token amounts based on share 根据份额计算代币数量        
         const tokenAAmount = reserveA.mul(lpBalance).div(totalSupply);

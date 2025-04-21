@@ -85,6 +85,7 @@ interface LiquidityTranslation {
   processing: string;
   initialLiquidityWarning: string;
   initialLiquidityWarningText: string;
+  pairAddress: string;
 }
 
 interface LiquidityTranslationsType {
@@ -253,7 +254,8 @@ const LiquidityPage = () => {
       addingLiquidity: 'Adding liquidity',
       processing: 'Processing',
       initialLiquidityWarning: 'Minimum Initial Liquidity Required',
-      initialLiquidityWarningText: 'For new pools, you must provide enough tokens so that the square root of (amount1 × amount2) is at least 1000. The recommended minimum is 5000 of each token for a new pool. Add enough liquidity to meet this requirement, otherwise the transaction will fail.'
+      initialLiquidityWarningText: 'For new pools, you must provide enough tokens so that the square root of (amount1 × amount2) is at least 1000. The recommended minimum is 5000 of each token for a new pool. Add enough liquidity to meet this requirement, otherwise the transaction will fail.',
+      pairAddress: 'Pair Address'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -292,7 +294,8 @@ const LiquidityPage = () => {
       addingLiquidity: '添加流动性中',
       processing: '处理中',
       initialLiquidityWarning: '需要最小初始流动性',
-      initialLiquidityWarningText: '对于新池，您必须提供足够的代币，使得（数量1 × 数量2）的平方根至少为1000。新池的建议最小值是每种代币5000。添加足够的流动性以满足此要求，否则交易将失败。'
+      initialLiquidityWarningText: '对于新池，您必须提供足够的代币，使得（数量1 × 数量2）的平方根至少为1000。新池的建议最小值是每种代币5000。添加足够的流动性以满足此要求，否则交易将失败。',
+      pairAddress: '配对地址'
     }
   };
   
@@ -433,7 +436,18 @@ const LiquidityPage = () => {
         tokenBAmount
       );
       
-      setLpAmount(parseFloat(lpTokens).toFixed(6));
+      console.log("LP tokens calculation result:", lpTokens);
+      
+      // Ensure we have a valid number for display
+      const lpTokensNumber = parseFloat(lpTokens);
+      if (isNaN(lpTokensNumber) || lpTokensNumber <= 0) {
+        console.error("Invalid LP tokens amount:", lpTokens);
+        setLpAmount("0.000000");
+        setShowLpInfo(false);
+        return;
+      }
+      
+      setLpAmount(lpTokensNumber.toFixed(6));
       
       // Calculate pool share
       if (parseFloat(pairReserves[0]) === 0 && parseFloat(pairReserves[1]) === 0) {
@@ -442,8 +456,14 @@ const LiquidityPage = () => {
       } else {
         const reserveA = parseFloat(pairReserves[0]);
         const amountA = parseFloat(tokenAAmount);
-        const share = (amountA / (reserveA + amountA)) * 100;
-        setPoolShare(`${share.toFixed(2)}%`);
+        
+        // Prevent division by zero
+        if (reserveA + amountA > 0) {
+          const share = (amountA / (reserveA + amountA)) * 100;
+          setPoolShare(`${share.toFixed(2)}%`);
+        } else {
+          setPoolShare('0.00%');
+        }
       }
       
       setShowLpInfo(true);
@@ -1161,7 +1181,7 @@ const LiquidityPage = () => {
                         </button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div className="grid grid-cols-3 gap-2 text-sm mb-2">
                       <div>
                         <div className="text-gray-400">{lt('pooled')} {position.tokenASymbol}</div>
                         <div className="text-white">{position.tokenAAmount} {position.tokenASymbol}</div>
@@ -1172,8 +1192,12 @@ const LiquidityPage = () => {
                       </div>
                       <div>
                         <div className="text-gray-400">{lt('yourShare')}</div>
-                        <div className="text-white">{position.poolShare}%</div>
+                        <div className="text-white">{(position.poolShare).toFixed(2)}%</div>
                       </div>
+                    </div>
+                    <div className="mt-1 pt-1 border-t border-gray-700">
+                      <div className="text-xs text-gray-400 mt-1">{lt('pairAddress')}:</div>
+                      <div className="text-xs text-blue-400 break-all">{position.pairAddress}</div>
                     </div>
                   </div>
                 );
