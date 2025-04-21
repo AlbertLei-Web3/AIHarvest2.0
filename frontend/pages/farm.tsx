@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import Image from 'next/image';
+import dynamic from 'next/dynamic';
 import { 
   getAllPools, 
   depositToFarm, 
@@ -906,4 +907,4 @@ const FarmPage = () => {
   );
 };
 
-export default FarmPage; 
+export default dynamic(() => Promise.resolve(FarmPage), { ssr: false }); 
