@@ -8,11 +8,18 @@ import {
   depositToFarm, 
   withdrawFromFarm, 
   harvestRewards, 
-  getPendingRewards 
+  getPendingRewards,
+  addPool,
+  updatePoolAllocation,
+  setRewardRate,
+  emergencyWithdraw,
+  getUserInfo,
+  getPoolInfo
 } from '@/utils/farmContracts';
-import { getTokenBalance, approveLPToken } from '@/utils/contracts';
+import { getTokenBalance, approveLPToken, getUserLiquidityPositions, getTokenContract, getRouterContract } from '@/utils/contracts';
 import { ethers } from 'ethers';
 import { contractAddresses } from '@/constants/addresses';
+import { farmABI as FarmAbi, erc20ABI as IERC20Abi } from '@/constants/abis';
 
 interface Token {
   name: string;
@@ -74,6 +81,46 @@ interface FarmTranslation {
   harvesting: string;
   txError: string;
   txSuccess: string;
+  adminPanel: string;
+  adminPanelDesc: string;
+  addPool: string;
+  lpTokenAddress: string;
+  allocPoints: string;
+  add: string;
+  updatePool: string;
+  poolId: string;
+  poolIdHelp: string;
+  allocPointsHelp: string;
+  update: string;
+  rewardSettings: string;
+  aihPerSecond: string;
+  aihPerSecondHelp: string;
+  setRate: string;
+  adminActions: string;
+  processing: string;
+  farmManagement: string;
+  rewardManagement: string;
+  invalidAddress: string;
+  poolIdInvalid: string;
+  allocPointsInvalid: string;
+  aihRateInvalid: string;
+  aihPerDay: string;
+  ownerOnly: string;
+  checkPoolId: string;
+  poolExists: string;
+  poolNotFound: string;
+  checking: string;
+  emergencyWithdraw: string;
+  emergencyWithdrawing: string;
+  emergencyWarning: string;
+  walletConnectRequired: string;
+  noStakedLp: string;
+  withdrawSuccess: string;
+  transactionFailed: string;
+  invalidAmount: string;
+  insufficientBalance: string;
+  insufficientStaked: string;
+  noRewards: string;
 }
 
 interface FarmTranslationsType {
@@ -148,6 +195,67 @@ const defaultFarms: FarmsType = {
   }
 };
 
+// Helper function to get pair name from LP token address
+const getPairNameFromAddress = async (lpTokenAddress: string): Promise<any> => {
+  try {
+    if (!lpTokenAddress || lpTokenAddress === ethers.constants.AddressZero) {
+      return null;
+    }
+    
+    // Try to get the token info
+    const lpToken = getTokenContract(lpTokenAddress);
+    let name = '';
+    
+    try {
+      name = await lpToken.name();
+    } catch (error) {
+      console.error('Error getting LP token name:', error);
+      name = 'Unknown Pair';
+    }
+    
+    let token0Address, token1Address, token0, token1;
+    
+    try {
+      // These calls might fail if the LP token doesn't have these methods
+      token0Address = await lpToken.token0();
+      token1Address = await lpToken.token1();
+      
+      // Get token symbols
+      token0 = getTokenContract(token0Address);
+      token1 = getTokenContract(token1Address);
+      
+      const token0Symbol = await token0.symbol();
+      const token1Symbol = await token1.symbol();
+      
+      return {
+        name: `${token0Symbol}-${token1Symbol}`,
+        token0: token0Address,
+        token1: token1Address,
+        token0Symbol,
+        token1Symbol,
+        valuePerLp: 50, // Placeholder value
+        balance: await getTokenBalance(lpTokenAddress, window.ethereum.selectedAddress)
+      };
+    } catch (error) {
+      console.error('Error getting token info from LP token:', error);
+      
+      // Fallback: just use the LP token name
+      return {
+        name: name || `LP Token`,
+        token0: ethers.constants.AddressZero,
+        token1: ethers.constants.AddressZero,
+        token0Symbol: 'Unknown',
+        token1Symbol: 'Unknown',
+        valuePerLp: 50, // Placeholder value
+        balance: await getTokenBalance(lpTokenAddress, window.ethereum.selectedAddress)
+      };
+    }
+  } catch (error) {
+    console.error(`Error getting pair name from address ${lpTokenAddress}:`, error);
+    return null;
+  }
+};
+
 const FarmPage = () => {
   const [userFarms, setUserFarms] = useState<FarmsType>(defaultFarms);
   const [totalStakedValue, setTotalStakedValue] = useState<number>(0);
@@ -158,6 +266,14 @@ const FarmPage = () => {
   const [notification, setNotification] = useState<{type: string, message: string} | null>(null);
   const [isApproving, setIsApproving] = useState<{[key: string]: boolean}>({});
   const [isTransacting, setIsTransacting] = useState<{[key: string]: boolean}>({});
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [newPoolLpToken, setNewPoolLpToken] = useState<string>('');
+  const [newPoolAllocPoints, setNewPoolAllocPoints] = useState<number>(100);
+  const [updatePoolId, setUpdatePoolId] = useState<number>(0);
+  const [updateAllocPoints, setUpdateAllocPoints] = useState<number>(100);
+  const [aihPerSecond, setAihPerSecond] = useState<string>('10000000000000000'); // 0.01 ETH in wei
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isEmergencyWithdrawing, setIsEmergencyWithdrawing] = useState<boolean>(false);
   
   const { address, isConnected } = useAccount();
   const { language, t } = useLanguage();
@@ -190,7 +306,47 @@ const FarmPage = () => {
       withdrawing: 'Withdrawing...',
       harvesting: 'Harvesting...',
       txError: 'Transaction failed',
-      txSuccess: 'Transaction successful'
+      txSuccess: 'Transaction successful',
+      adminPanel: 'Admin Panel',
+      adminPanelDesc: 'Manage farm pools and rewards',
+      addPool: 'Add New Pool',
+      lpTokenAddress: 'LP Token Address',
+      allocPoints: 'Allocation Points',
+      add: 'Add',
+      updatePool: 'Update Pool',
+      poolId: 'Pool ID',
+      poolIdHelp: 'The ID of the pool to update (starting from 0)',
+      allocPointsHelp: 'Higher allocation points give more rewards to the pool',
+      update: 'Update',
+      rewardSettings: 'Reward Settings',
+      aihPerSecond: 'AIH Per Second',
+      aihPerSecondHelp: 'Amount of AIH tokens distributed per second across all pools',
+      setRate: 'Set Rate',
+      adminActions: 'Admin Actions',
+      processing: 'Processing...',
+      farmManagement: 'Farm Management',
+      rewardManagement: 'Reward Management',
+      invalidAddress: 'Invalid address format',
+      poolIdInvalid: 'Pool ID must be a non-negative number',
+      allocPointsInvalid: 'Allocation points must be a positive number',
+      aihRateInvalid: 'AIH rate must be a positive number',
+      aihPerDay: 'AIH Per Day',
+      ownerOnly: 'Owner Only',
+      checkPoolId: 'Check if pool exists',
+      poolExists: 'Pool exists',
+      poolNotFound: 'Pool not found',
+      checking: 'Checking...',
+      emergencyWithdraw: 'Emergency Withdraw',
+      emergencyWithdrawing: 'Processing emergency withdrawal...',
+      emergencyWarning: 'Warning: Emergency withdrawal forfeits any pending rewards. Continue?',
+      walletConnectRequired: 'Please connect your wallet',
+      noStakedLp: 'No LP tokens to withdraw',
+      withdrawSuccess: 'Successfully withdrawn LP tokens',
+      transactionFailed: 'Transaction failed',
+      invalidAmount: 'Please enter a valid amount',
+      insufficientBalance: 'Insufficient balance',
+      insufficientStaked: 'Insufficient staked amount',
+      noRewards: 'No rewards to harvest'
     },
     zh: {
       farms: '农场',
@@ -218,7 +374,47 @@ const FarmPage = () => {
       withdrawing: '提取中...',
       harvesting: '收获中...',
       txError: '交易失败',
-      txSuccess: '交易成功'
+      txSuccess: '交易成功',
+      adminPanel: '管理员面板',
+      adminPanelDesc: '管理农场池和奖励',
+      addPool: '添加新池',
+      lpTokenAddress: 'LP 代币地址',
+      allocPoints: '分配点数',
+      add: '添加',
+      updatePool: '更新池',
+      poolId: '池 ID',
+      poolIdHelp: '要更新的池的ID（从0开始）',
+      allocPointsHelp: '更高的分配点数会给池子更多的奖励',
+      update: '更新',
+      rewardSettings: '奖励设置',
+      aihPerSecond: '每秒 AIH',
+      aihPerSecondHelp: '在所有池中每秒分配的AIH代币数量',
+      setRate: '设置比率',
+      adminActions: '管理员操作',
+      processing: '处理中...',
+      farmManagement: '农场管理',
+      rewardManagement: '奖励管理',
+      invalidAddress: '地址格式无效',
+      poolIdInvalid: '池ID必须是非负数',
+      allocPointsInvalid: '分配点数必须是正数',
+      aihRateInvalid: 'AIH比率必须是正数',
+      aihPerDay: '每天AIH',
+      ownerOnly: '仅限所有者',
+      checkPoolId: '检查池是否存在',
+      poolExists: '池存在',
+      poolNotFound: '未找到池',
+      checking: '检查中...',
+      emergencyWithdraw: '紧急提取',
+      emergencyWithdrawing: '正在处理紧急提款...',
+      emergencyWarning: '警告：紧急提款将放弃所有待领取奖励。是否继续？',
+      walletConnectRequired: '请连接您的钱包',
+      noStakedLp: '没有可提取的LP代币',
+      withdrawSuccess: '成功提取LP代币',
+      transactionFailed: '交易失败',
+      invalidAmount: '请输入有效金额',
+      insufficientBalance: '余额不足',
+      insufficientStaked: '质押数量不足',
+      noRewards: '没有可收获的奖励'
     }
   };
   
@@ -237,59 +433,148 @@ const FarmPage = () => {
       // Get all pools from the farm contract
       const pools = await getAllPools(address);
       
-      if (pools.length === 0) {
-        setIsLoading(false);
-        return;
-      }
-      
       const updatedFarms: FarmsType = {};
       
-      // Process each pool
-      for (let i = 0; i < pools.length; i++) {
-        const pool = pools[i];
+      if (pools.length === 0) {
+        console.log("No pools found in farm contract, getting user's liquidity positions...");
         
-        // Skip invalid pools
-        if (!pool.lpToken || pool.lpToken === ethers.constants.AddressZero) continue;
+        // Get user's actual liquidity positions
+        const userPositions = await getUserLiquidityPositions(address, []);
+        console.log("User positions:", userPositions);
         
-        // Get LP token balance for each farm
-        let lpBalance;
-        try {
-          lpBalance = await getTokenBalance(pool.lpToken, address);
-        } catch (error) {
-          console.error(`Error getting LP balance for pool ${i}:`, error);
-          lpBalance = '0';
+        if (userPositions.length === 0) {
+          setNotification({
+            type: 'info',
+            message: 'No farm pools or liquidity positions found. Please add liquidity first.'
+          });
+          
+          setTimeout(() => {
+            setNotification(null);
+          }, 5000);
+          
+          setIsLoading(false);
+          return;
         }
         
-        // Get allocation point percentage for APR calculation (simplified)
-        const allocPoint = Number(pool.allocPoint);
-        const apr = allocPoint > 0 ? 50 + (allocPoint / 10) : 0; // Simplified APR calculation
-        
-        updatedFarms[i.toString()] = {
-          id: i,
-          name: `LP Token ${i}`, // This would ideally be derived from the LP token symbols
-          description: 'Stake LP tokens to earn AIH',
-          apr: apr,
-          totalStaked: pool.totalStaked,
-          dailyRewards: 100 / pools.length, // Simplified - distribute 100 AIH across all pools
-          lpToken: pool.lpToken,
-          tokenA: 'aih', // Default for now - would need a mapping from LP token to underlying tokens
-          tokenB: 'eth', // Default for now - would need a mapping from LP token to underlying tokens
-          balance: lpBalance,
-          userStaked: pool.userStaked,
-          pendingRewards: pool.pendingRewards,
-          value: 50, // Simplified value per LP token
-          pairAddress: pool.lpToken
-        };
+        // Use user's liquidity positions as potential farm pools
+        for (let i = 0; i < userPositions.length; i++) {
+          const position = userPositions[i];
+          const pairAddress = position.pairAddress;
+          const tokenSymbols = position.name.split('-');
+          
+          if (tokenSymbols.length === 2) {
+            updatedFarms[`lp-${i}`] = {
+              id: i,
+              name: position.name,
+              description: `${position.name} LP Token Farm`,
+              apr: 0, // Set APR to 0 initially
+              totalStaked: '0',
+              dailyRewards: 0,
+              lpToken: pairAddress,
+              tokenA: tokenSymbols[0].toLowerCase(),
+              tokenB: tokenSymbols[1].toLowerCase(),
+              balance: position.balance,
+              userStaked: '0',
+              pendingRewards: '0',
+              value: parseFloat(position.value) || 0,
+              pairAddress: pairAddress
+            };
+          }
+        }
+      } else {
+        // Process pools from the farm contract
+        for (let i = 0; i < pools.length; i++) {
+          const poolInfo = pools[i];
+          const lpToken = poolInfo.lpToken;
+          
+          // Get user info for this pool
+          const userInfo = await getUserInfo(i, address);
+          
+          // Get pair name and tokens
+          let pairName = `Pool ${i}`;
+          let tokenA = 'token1';
+          let tokenB = 'token2';
+          let value = 0;
+          let balance = '0';
+          let pairAddress = lpToken;
+          
+          try {
+            // Try to get the pair name from the router
+            const pairInfo = await getPairNameFromAddress(lpToken);
+            if (pairInfo) {
+              pairName = pairInfo.name;
+              tokenA = pairInfo.token0.toLowerCase();
+              tokenB = pairInfo.token1.toLowerCase();
+              value = pairInfo.valuePerLp || 0;
+              balance = pairInfo.balance || '0';
+            }
+          } catch (error) {
+            console.error(`Error getting pair name for LP token ${lpToken}:`, error);
+          }
+          
+          // Get pending rewards
+          const pendingRewards = await getPendingRewards(i, address);
+          
+          // Calculate daily rewards based on allocation points
+          const dailySecondsFactor = 86400; // seconds in a day
+          const rawRewardRate = parseFloat(ethers.utils.formatEther(poolInfo.rewardRate || '0'));
+          const dailyRewards = rawRewardRate * dailySecondsFactor;
+          
+          // Calculate APR (very simplified)
+          let apr = 0;
+          
+          if (parseFloat(poolInfo.totalStaked) > 0 && value > 0) {
+            const yearlyRewards = dailyRewards * 365;
+            const stakedValue = parseFloat(poolInfo.totalStaked) * value;
+            apr = (yearlyRewards / stakedValue) * 100;
+          }
+          
+          updatedFarms[`pool-${i}`] = {
+            id: i,
+            name: pairName,
+            description: `${pairName} LP Token Farm`,
+            apr: apr,
+            totalStaked: poolInfo.totalStaked,
+            dailyRewards: dailyRewards,
+            lpToken: lpToken,
+            tokenA: tokenA,
+            tokenB: tokenB,
+            balance: balance,
+            userStaked: userInfo.amount,
+            pendingRewards: pendingRewards,
+            value: value,
+            pairAddress: pairAddress
+          };
+        }
       }
       
       setUserFarms(updatedFarms);
       calculateTotals(updatedFarms);
+      
+      // Check if user is admin
+      try {
+        const signer = new ethers.providers.Web3Provider(window.ethereum).getSigner();
+        const farmInstance = new ethers.Contract(
+          contractAddresses.farm,
+          FarmAbi,
+          signer
+        );
+        
+        const owner = await farmInstance.owner();
+        setIsAdmin(owner.toLowerCase() === address.toLowerCase());
+      } catch (error) {
+        console.error('Error checking if user is admin:', error);
+      }
     } catch (error) {
       console.error('Error loading farm data:', error);
       setNotification({
         type: 'error',
         message: `Error loading farm data: ${error instanceof Error ? error.message : String(error)}`
       });
+      
+      setTimeout(() => {
+        setNotification(null);
+      }, 5000);
     } finally {
       setIsLoading(false);
     }
@@ -366,9 +651,17 @@ const FarmPage = () => {
     });
   };
   
-  // Approve LP tokens for staking
+  // Approve tokens for staking
   const handleApprove = async (farmId: string): Promise<boolean> => {
-    if (!isConnected || !address) return false;
+    if (!isConnected || !address) {
+      setNotification({
+        type: 'error',
+        message: ft('walletConnectRequired')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return false;
+    }
     
     const farm = userFarms[farmId];
     const amount = stakeAmounts[farmId];
@@ -376,8 +669,10 @@ const FarmPage = () => {
     if (!amount || parseFloat(amount) <= 0) {
       setNotification({
         type: 'error',
-        message: 'Please enter a valid amount'
+        message: ft('invalidAmount')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return false;
     }
     
@@ -392,19 +687,41 @@ const FarmPage = () => {
         message: ft('approving')
       });
       
-      // Need to update this to use approveLPToken if we're dealing with LP tokens
-      const tx = await approveLPToken(
-        farm.pairAddress || farm.lpToken,
-        contractAddresses.farm,
-        ethers.utils.parseUnits(amount, 18).toString()
+      // Get LP token contract
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const signer = provider.getSigner();
+      const lpTokenContract = new ethers.Contract(
+        farm.lpToken,
+        IERC20Abi,
+        signer
       );
       
-      await tx.wait();
+      // Check allowance
+      const allowance = await lpTokenContract.allowance(address, contractAddresses.farm);
       
-      setNotification({
-        type: 'success',
-        message: `${ft('txSuccess')}: ${farm.name} approved for staking`
-      });
+      // If not approved, approve tokens
+      if (allowance.lt(ethers.utils.parseEther(amount))) {
+        const approveTx = await lpTokenContract.approve(
+          contractAddresses.farm,
+          ethers.constants.MaxUint256
+        );
+        
+        await approveTx.wait();
+        
+        setNotification({
+          type: 'success',
+          message: `${ft('txSuccess')}: Approved ${farm.name} tokens`
+        });
+        
+        setTimeout(() => setNotification(null), 5000);
+      } else {
+        setNotification({
+          type: 'success',
+          message: `${farm.name} tokens already approved`
+        });
+        
+        setTimeout(() => setNotification(null), 5000);
+      }
       
       return true;
     } catch (error) {
@@ -413,23 +730,28 @@ const FarmPage = () => {
         type: 'error',
         message: `${ft('txError')}: ${error instanceof Error ? error.message : String(error)}`
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return false;
     } finally {
       setIsApproving({
         ...isApproving,
         [farmId]: false
       });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
     }
   };
   
   // Stake LP tokens
   const handleStake = async (farmId: string): Promise<void> => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address) {
+      setNotification({
+        type: 'error',
+        message: ft('walletConnectRequired')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
     
     const farm = userFarms[farmId];
     const amount = stakeAmounts[farmId];
@@ -437,16 +759,20 @@ const FarmPage = () => {
     if (!amount || parseFloat(amount) <= 0) {
       setNotification({
         type: 'error',
-        message: 'Please enter a valid amount'
+        message: ft('invalidAmount')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return;
     }
     
     if (parseFloat(amount) > parseFloat(farm.balance)) {
       setNotification({
         type: 'error',
-        message: 'Insufficient balance'
+        message: ft('insufficientBalance')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return;
     }
     
@@ -481,28 +807,35 @@ const FarmPage = () => {
       
       // Reload farm data after staking
       await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error staking tokens:', error);
       setNotification({
         type: 'error',
         message: `${ft('txError')}: ${error instanceof Error ? error.message : String(error)}`
       });
+      
+      setTimeout(() => setNotification(null), 5000);
     } finally {
       setIsTransacting({
         ...isTransacting,
         [farmId]: false
       });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
     }
   };
   
   // Withdraw LP tokens
   const handleWithdraw = async (farmId: string): Promise<void> => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address) {
+      setNotification({
+        type: 'error',
+        message: ft('walletConnectRequired')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
     
     const farm = userFarms[farmId];
     const amount = withdrawAmounts[farmId];
@@ -510,16 +843,20 @@ const FarmPage = () => {
     if (!amount || parseFloat(amount) <= 0) {
       setNotification({
         type: 'error',
-        message: 'Please enter a valid amount'
+        message: ft('invalidAmount')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return;
     }
     
     if (parseFloat(amount) > parseFloat(farm.userStaked)) {
       setNotification({
         type: 'error',
-        message: 'Insufficient staked amount'
+        message: ft('insufficientStaked')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return;
     }
     
@@ -539,7 +876,7 @@ const FarmPage = () => {
       
       setNotification({
         type: 'success',
-        message: `${ft('txSuccess')}: Withdrawn ${amount} ${farm.name} tokens`
+        message: `${ft('withdrawSuccess')}: ${amount} ${farm.name} tokens`
       });
       
       // Reset input
@@ -550,36 +887,45 @@ const FarmPage = () => {
       
       // Reload farm data after withdrawal
       await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error withdrawing tokens:', error);
       setNotification({
         type: 'error',
-        message: `${ft('txError')}: ${error instanceof Error ? error.message : String(error)}`
+        message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
       });
+      
+      setTimeout(() => setNotification(null), 5000);
     } finally {
       setIsTransacting({
         ...isTransacting,
         [farmId]: false
       });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
     }
   };
   
   // Harvest rewards
   const handleHarvest = async (farmId: string): Promise<void> => {
-    if (!isConnected || !address) return;
+    if (!isConnected || !address) {
+      setNotification({
+        type: 'error',
+        message: ft('walletConnectRequired')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
     
     const farm = userFarms[farmId];
     
     if (parseFloat(farm.pendingRewards) <= 0) {
       setNotification({
         type: 'error',
-        message: 'No rewards to harvest'
+        message: ft('noRewards')
       });
+      
+      setTimeout(() => setNotification(null), 5000);
       return;
     }
     
@@ -604,24 +950,41 @@ const FarmPage = () => {
       
       // Reload farm data after harvesting
       await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
     } catch (error) {
       console.error('Error harvesting rewards:', error);
       setNotification({
         type: 'error',
-        message: `${ft('txError')}: ${error instanceof Error ? error.message : String(error)}`
+        message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
       });
+      
+      setTimeout(() => setNotification(null), 5000);
     } finally {
       setIsTransacting({
         ...isTransacting,
         [farmId]: false
       });
-      
-      // Clear notification after 3 seconds
-      setTimeout(() => {
-        setNotification(null);
-      }, 3000);
     }
   };
+  
+  // Check if connected wallet is admin
+  useEffect(() => {
+    if (isConnected && address) {
+      // For demo purposes, we'll hard-code an admin address
+      // In production, you should implement a proper admin check from the contract
+      const adminAddresses = [
+        '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266', // Default Hardhat account #0
+        '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', // Default Hardhat account #1
+        '0x90F79bf6EB2c4f870365E785982E1f101E93b906',  // Default Hardhat account #2
+        address // For testing - remove this in production!
+      ];
+      
+      setIsAdmin(adminAddresses.map(a => a.toLowerCase()).includes(address.toLowerCase()));
+    } else {
+      setIsAdmin(false);
+    }
+  }, [isConnected, address]);
   
   // Initialize farm data when the page loads or connection status changes
   useEffect(() => {
@@ -678,6 +1041,14 @@ const FarmPage = () => {
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
       );
+    } else if (notification.type === 'info') {
+      bgColor = 'bg-blue-900';
+      textColor = 'text-blue-200';
+      icon = (
+        <svg className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      );
     }
     
     return (
@@ -699,6 +1070,288 @@ const FarmPage = () => {
         </div>
       </div>
     );
+  };
+
+  // Handle adding a new pool
+  const handleAddPool = async () => {
+    if (!isAdmin || !isConnected) {
+      if (!isConnected) {
+        setNotification({
+          type: 'error',
+          message: ft('walletConnectRequired')
+        });
+      } else {
+        setNotification({
+          type: 'error',
+          message: ft('ownerOnly')
+        });
+      }
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    // Validate LP token address
+    if (!ethers.utils.isAddress(newPoolLpToken)) {
+      setNotification({
+        type: 'error',
+        message: ft('invalidAddress')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    // Validate allocation points
+    if (newPoolAllocPoints <= 0) {
+      setNotification({
+        type: 'error',
+        message: ft('allocPointsInvalid')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      setNotification({
+        type: 'loading',
+        message: ft('processing')
+      });
+      
+      const tx = await addPool(newPoolLpToken, newPoolAllocPoints);
+      await tx.wait();
+      
+      setNotification({
+        type: 'success',
+        message: `${ft('txSuccess')}: ${ft('addPool')}`
+      });
+      
+      // Reset inputs
+      setNewPoolLpToken('');
+      setNewPoolAllocPoints(100);
+      
+      // Reload farm data
+      await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error adding pool:', error);
+      setNotification({
+        type: 'error',
+        message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Handle updating pool allocation
+  const handleUpdatePool = async () => {
+    if (!isAdmin || !isConnected) {
+      if (!isConnected) {
+        setNotification({
+          type: 'error',
+          message: ft('walletConnectRequired')
+        });
+      } else {
+        setNotification({
+          type: 'error',
+          message: ft('ownerOnly')
+        });
+      }
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    // Validate pool ID
+    if (updatePoolId < 0) {
+      setNotification({
+        type: 'error',
+        message: ft('poolIdInvalid')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    // Validate allocation points
+    if (updateAllocPoints < 0) {
+      setNotification({
+        type: 'error',
+        message: ft('allocPointsInvalid')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      setNotification({
+        type: 'loading',
+        message: ft('processing')
+      });
+      
+      const tx = await updatePoolAllocation(updatePoolId, updateAllocPoints);
+      await tx.wait();
+      
+      setNotification({
+        type: 'success',
+        message: `${ft('txSuccess')}: ${ft('updatePool')}`
+      });
+      
+      // Reload farm data
+      await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error updating pool:', error);
+      setNotification({
+        type: 'error',
+        message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+  
+  // Handle setting reward rate
+  const handleSetRewardRate = async () => {
+    if (!isAdmin || !isConnected) {
+      if (!isConnected) {
+        setNotification({
+          type: 'error',
+          message: ft('walletConnectRequired')
+        });
+      } else {
+        setNotification({
+          type: 'error',
+          message: ft('ownerOnly')
+        });
+      }
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    // Validate AIH per second
+    if (parseFloat(aihPerSecond) <= 0) {
+      setNotification({
+        type: 'error',
+        message: ft('aihRateInvalid')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      setNotification({
+        type: 'loading',
+        message: ft('processing')
+      });
+      
+      const tx = await setRewardRate(aihPerSecond);
+      await tx.wait();
+      
+      setNotification({
+        type: 'success',
+        message: `${ft('txSuccess')}: ${ft('rewardSettings')}`
+      });
+      
+      // Reload farm data
+      await loadUserFarmData();
+      
+      setTimeout(() => setNotification(null), 5000);
+    } catch (error) {
+      console.error('Error setting reward rate:', error);
+      setNotification({
+        type: 'error',
+        message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Handle emergency withdraw
+  const handleEmergencyWithdraw = async (poolId: string) => {
+    if (!isConnected || !address) {
+      setNotification({
+        type: 'error',
+        message: ft('walletConnectRequired')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    const farm = userFarms[poolId];
+    
+    if (parseFloat(farm.userStaked) <= 0) {
+      setNotification({
+        type: 'error',
+        message: ft('noStakedLp')
+      });
+      
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+    
+    if (window.confirm(ft('emergencyWarning'))) {
+      setIsEmergencyWithdrawing(true);
+      setIsTransacting({
+        ...isTransacting,
+        [poolId]: true
+      });
+      
+      try {
+        setNotification({
+          type: 'loading',
+          message: ft('emergencyWithdrawing')
+        });
+        
+        const tx = await emergencyWithdraw(Number(poolId));
+        await tx.wait();
+        
+        setNotification({
+          type: 'success',
+          message: ft('withdrawSuccess')
+        });
+        
+        // Reload farm data
+        await loadUserFarmData();
+        
+        setTimeout(() => setNotification(null), 5000);
+      } catch (error) {
+        console.error('Error emergency withdrawing:', error);
+        setNotification({
+          type: 'error',
+          message: `${ft('transactionFailed')}: ${error instanceof Error ? error.message : String(error)}`
+        });
+        
+        setTimeout(() => setNotification(null), 5000);
+      } finally {
+        setIsEmergencyWithdrawing(false);
+        setIsTransacting({
+          ...isTransacting,
+          [poolId]: false
+        });
+      }
+    }
   };
 
   return (
@@ -753,6 +1406,177 @@ const FarmPage = () => {
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
             <p className="text-blue-500">Loading farm data...</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Admin Panel */}
+      {isAdmin && (
+        <div className="bg-dark-lighter rounded-2xl p-6 mb-8 shadow-lg border border-primary/10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-white">{ft('adminPanel')}</h2>
+              <p className="text-sm text-gray-400">{ft('adminPanelDesc')}</p>
+            </div>
+            <div className="bg-red-800/20 text-red-400 px-3 py-1 rounded-full text-sm font-medium">
+              {ft('ownerOnly')}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Farm Management Section */}
+            <div className="bg-dark-default rounded-lg p-5 border border-gray-700">
+              <h3 className="text-lg font-medium text-white mb-4 border-b border-gray-700 pb-2">
+                {ft('farmManagement')}
+              </h3>
+              
+              {/* Add Pool */}
+              <div className="mb-6 bg-dark-lighter p-4 rounded-lg">
+                <h4 className="text-md font-medium text-white mb-3">{ft('addPool')}</h4>
+                
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-400 mb-1">{ft('lpTokenAddress')}</label>
+                  <input
+                    type="text"
+                    placeholder="0x..."
+                    className={`w-full bg-dark-default border ${!newPoolLpToken || ethers.utils.isAddress(newPoolLpToken) ? 'border-gray-700' : 'border-red-500'} rounded-lg px-3 py-2 text-white outline-none focus:border-primary transition-colors`}
+                    value={newPoolLpToken}
+                    onChange={(e) => setNewPoolLpToken(e.target.value)}
+                    disabled={isProcessing}
+                  />
+                  {newPoolLpToken && !ethers.utils.isAddress(newPoolLpToken) && 
+                    <p className="text-xs text-red-500 mt-1">{ft('invalidAddress')}</p>
+                  }
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-400 mb-1">{ft('allocPoints')}</label>
+                  <input
+                    type="number"
+                    placeholder="100"
+                    className={`w-full bg-dark-default border ${newPoolAllocPoints > 0 ? 'border-gray-700' : 'border-red-500'} rounded-lg px-3 py-2 text-white outline-none focus:border-primary transition-colors`}
+                    value={newPoolAllocPoints}
+                    onChange={(e) => setNewPoolAllocPoints(parseInt(e.target.value) || 0)}
+                    disabled={isProcessing}
+                    min="1"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{ft('allocPointsHelp')}</p>
+                </div>
+                
+                <button 
+                  className={`w-full bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white py-2 rounded-lg transition-all duration-300 ${(isProcessing || !ethers.utils.isAddress(newPoolLpToken) || newPoolAllocPoints <= 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={handleAddPool}
+                  disabled={isProcessing || !ethers.utils.isAddress(newPoolLpToken) || newPoolAllocPoints <= 0}
+                >
+                  {isProcessing ? ft('processing') : ft('add')}
+                </button>
+              </div>
+              
+              {/* Update Pool */}
+              <div className="bg-dark-lighter p-4 rounded-lg">
+                <h4 className="text-md font-medium text-white mb-3">{ft('updatePool')}</h4>
+                
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-400 mb-1">{ft('poolId')}</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    className={`w-full bg-dark-default border ${updatePoolId >= 0 ? 'border-gray-700' : 'border-red-500'} rounded-lg px-3 py-2 text-white outline-none focus:border-primary transition-colors`}
+                    value={updatePoolId}
+                    onChange={(e) => setUpdatePoolId(parseInt(e.target.value) || 0)}
+                    disabled={isProcessing}
+                    min="0"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{ft('poolIdHelp')}</p>
+                </div>
+                
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-400 mb-1">{ft('allocPoints')}</label>
+                  <input
+                    type="number"
+                    placeholder="100"
+                    className={`w-full bg-dark-default border ${updateAllocPoints >= 0 ? 'border-gray-700' : 'border-red-500'} rounded-lg px-3 py-2 text-white outline-none focus:border-primary transition-colors`}
+                    value={updateAllocPoints}
+                    onChange={(e) => setUpdateAllocPoints(parseInt(e.target.value) || 0)}
+                    disabled={isProcessing}
+                    min="0"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{ft('allocPointsHelp')}</p>
+                </div>
+                
+                <button 
+                  className={`w-full bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white py-2 rounded-lg transition-all duration-300 ${(isProcessing || updatePoolId < 0 || updateAllocPoints < 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={handleUpdatePool}
+                  disabled={isProcessing || updatePoolId < 0 || updateAllocPoints < 0}
+                >
+                  {isProcessing ? ft('processing') : ft('update')}
+                </button>
+              </div>
+            </div>
+            
+            {/* Reward Management Section */}
+            <div className="bg-dark-default rounded-lg p-5 border border-gray-700">
+              <h3 className="text-lg font-medium text-white mb-4 border-b border-gray-700 pb-2">
+                {ft('rewardManagement')}
+              </h3>
+              
+              {/* Reward Settings */}
+              <div className="bg-dark-lighter p-4 rounded-lg mb-4">
+                <h4 className="text-md font-medium text-white mb-3">{ft('rewardSettings')}</h4>
+                
+                <div className="mb-3">
+                  <label className="block text-sm text-gray-400 mb-1">{ft('aihPerSecond')}</label>
+                  <input
+                    type="text"
+                    placeholder="10000000000000000"
+                    className={`w-full bg-dark-default border ${parseFloat(aihPerSecond) > 0 ? 'border-gray-700' : 'border-red-500'} rounded-lg px-3 py-2 text-white outline-none focus:border-primary transition-colors`}
+                    value={aihPerSecond}
+                    onChange={(e) => setAihPerSecond(e.target.value)}
+                    disabled={isProcessing}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{ft('aihPerSecondHelp')}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4 mb-3 bg-dark-default p-3 rounded-lg">
+                  <div>
+                    <p className="text-xs text-gray-400">{ft('aihPerSecond')}</p>
+                    <p className="text-white font-medium">{ethers.utils.formatUnits(aihPerSecond || '0', 18)} AIH</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-400">{ft('aihPerDay')}</p>
+                    <p className="text-white font-medium">
+                      {(parseFloat(ethers.utils.formatUnits(aihPerSecond || '0', 18)) * 86400).toFixed(2)} AIH
+                    </p>
+                  </div>
+                </div>
+                
+                <button 
+                  className={`w-full bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white py-2 rounded-lg transition-all duration-300 ${(isProcessing || parseFloat(aihPerSecond) <= 0) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={handleSetRewardRate}
+                  disabled={isProcessing || parseFloat(aihPerSecond) <= 0}
+                >
+                  {isProcessing ? ft('processing') : ft('setRate')}
+                </button>
+              </div>
+              
+              {/* Current Farm Statistics */}
+              <div className="bg-dark-lighter p-4 rounded-lg">
+                <h4 className="text-md font-medium text-white mb-3">Farm Statistics</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-dark-default p-3 rounded-lg">
+                    <p className="text-xs text-gray-400">Total Pools</p>
+                    <p className="text-white font-medium">{Object.keys(userFarms).length}</p>
+                  </div>
+                  <div className="bg-dark-default p-3 rounded-lg">
+                    <p className="text-xs text-gray-400">Total Staked Value</p>
+                    <p className="text-white font-medium">
+                      ${Object.values(userFarms).reduce((acc, farm) => 
+                      acc + (parseFloat(farm.totalStaked) * farm.value), 0).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -888,7 +1712,7 @@ const FarmPage = () => {
                     </div>
                     <button 
                       className={`w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700 transition ${!isConnected || isTransacting[farm.id.toString()] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                      onClick={() => handleWithdraw(farm.id.toString())}
+                      onClick={() => handleEmergencyWithdraw(farm.id.toString())}
                       disabled={!isConnected || isTransacting[farm.id.toString()]}
                     >
                       {isTransacting[farm.id.toString()] ? ft('withdrawing') : ft('withdraw')}

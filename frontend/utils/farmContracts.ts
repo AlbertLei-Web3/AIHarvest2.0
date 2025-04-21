@@ -29,6 +29,73 @@ export const getPoolLength = async (): Promise<number> => {
 };
 
 /**
+ * Adds a new pool to the farm contract (admin only)
+ * @param lpToken The LP token address
+ * @param allocPoint The allocation points for the pool
+ * @returns The transaction response
+ */
+export const addPool = async (
+  lpToken: string,
+  allocPoint: number
+): Promise<ethers.providers.TransactionResponse> => {
+  try {
+    const farm = getFarmContract();
+    
+    console.log(`Adding new pool for LP token ${lpToken} with ${allocPoint} allocation points`);
+    const tx = await farm.add(allocPoint, lpToken, false);
+    
+    return tx;
+  } catch (error) {
+    console.error(`Error adding new pool:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Updates the allocation points for a specific pool (admin only)
+ * @param poolId The ID of the pool to update
+ * @param allocPoint The new allocation points
+ * @returns The transaction response
+ */
+export const updatePoolAllocation = async (
+  poolId: number,
+  allocPoint: number
+): Promise<ethers.providers.TransactionResponse> => {
+  try {
+    const farm = getFarmContract();
+    
+    console.log(`Updating pool ${poolId} with ${allocPoint} allocation points`);
+    const tx = await farm.set(poolId, allocPoint, false);
+    
+    return tx;
+  } catch (error) {
+    console.error(`Error updating pool allocation:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Sets the AIH tokens distributed per second (admin only)
+ * @param aihPerSecond Amount of AIH tokens to distribute per second (in wei)
+ * @returns The transaction response
+ */
+export const setRewardRate = async (
+  aihPerSecond: string
+): Promise<ethers.providers.TransactionResponse> => {
+  try {
+    const farm = getFarmContract();
+    
+    console.log(`Setting AIH per second to ${aihPerSecond}`);
+    const tx = await farm.setAIHPerSecond(aihPerSecond);
+    
+    return tx;
+  } catch (error) {
+    console.error(`Error setting AIH per second:`, error);
+    throw error;
+  }
+};
+
+/**
  * Gets the details of a specific pool
  * @param poolId The ID of the pool
  * @returns Pool information
@@ -200,5 +267,24 @@ export const getAllPools = async (userAddress: string): Promise<any[]> => {
   } catch (error) {
     console.error('Error getting all pools:', error);
     return [];
+  }
+};
+
+/**
+ * Emergency withdraw from a farm without harvesting rewards
+ * @param poolId - The pool ID to emergency withdraw from
+ * @returns Transaction response
+ */
+export const emergencyWithdraw = async (poolId: number): Promise<ethers.providers.TransactionResponse> => {
+  try {
+    console.log(`Emergency withdrawing from pool ${poolId}`);
+    const farmContract = await getFarmContract();
+    
+    const tx = await farmContract.emergencyWithdraw(poolId);
+    console.log('Emergency withdraw transaction:', tx);
+    return tx;
+  } catch (error) {
+    console.error('Error in emergency withdraw:', error);
+    throw error;
   }
 }; 
