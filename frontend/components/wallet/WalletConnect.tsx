@@ -1,10 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { useAccount, useBalance, useDisconnect, useConnect } from 'wagmi';
 import { useLanguage } from '../layout/Header';
+import dynamic from 'next/dynamic';
 
 interface WalletConnectProps {
   variant?: 'button' | 'full';
 }
+
+// Etherscan link component that will be dynamically imported with no SSR
+const EtherscanLink = ({ address, children }: { address: string, children: React.ReactNode }) => (
+  <a 
+    href={`https://sepolia.etherscan.io/address/${address}`} 
+    target="_blank" 
+    rel="noopener noreferrer"
+    className="block w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-dark-default text-gray-300 hover:text-white transition"
+  >
+    {children}
+  </a>
+);
+
+// Dynamically import the component with SSR disabled
+const DynamicEtherscanLink = dynamic(
+  () => Promise.resolve(EtherscanLink),
+  { ssr: false }
+);
 
 const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => {
   const [isConnecting, setIsConnecting] = useState(false);
@@ -128,14 +147,9 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => 
                   {wt('copy')}
                 </button>
                 
-                <a 
-                  href={`https://sepolia.etherscan.io/address/${address}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="block w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-dark-default text-gray-300 hover:text-white transition"
-                >
+                <DynamicEtherscanLink address={address!}>
                   {wt('view')}
-                </a>
+                </DynamicEtherscanLink>
                 
                 <button 
                   className="w-full text-left px-2 py-1.5 text-sm rounded-md hover:bg-dark-default text-red-400 hover:text-red-300 transition"

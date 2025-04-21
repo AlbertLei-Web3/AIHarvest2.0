@@ -12,6 +12,7 @@ import {
   getRouterContract
 } from '@/utils/contracts';
 import { ethers } from 'ethers';
+import dynamic from 'next/dynamic';
 
 interface Token {
   name: string;
@@ -952,4 +953,9 @@ const SwapPage = () => {
   );
 };
 
-export default SwapPage; 
+// Wrap the SwapPage component with dynamic import to prevent hydration issues
+const SwapPageWithNoSSR = dynamic(() => Promise.resolve(SwapPage), { 
+  ssr: false 
+});
+
+export default SwapPageWithNoSSR; 
