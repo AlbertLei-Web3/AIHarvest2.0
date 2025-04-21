@@ -175,6 +175,10 @@ contract SimpleSwapRouter is Ownable {
             // First time adding liquidity 第一次添加流动性
             amountA = amountADesired;
             amountB = amountBDesired;
+            
+            // Ensure minimum amounts for first liquidity provision
+            // The product must be high enough to allow for minimum liquidity of 1000
+            require(sqrt(amountA * amountB) >= 1000, "INSUFFICIENT_INITIAL_AMOUNTS");
         } else {
             // Calculate optimal amounts 计算最优数量
             uint256 amountBOptimal = quote(amountADesired, reserveA, reserveB);
@@ -459,15 +463,25 @@ contract SimpleSwapRouter is Ownable {
         
         uint256 _totalSupply = pairData.totalSupply;
         
+        // For debugging
+        if (pairData.reserve0 == 0 || pairData.reserve1 == 0) {
+            revert("ZERO_RESERVES");
+        }
+        
         if (_totalSupply == 0) {
             // Initial liquidity provision 初始流动性提供
-            liquidity = sqrt(pairData.reserve0 * pairData.reserve1) - 1000; // Minimum liquidity 最小流动性
+            uint256 initialLiquidity = sqrt(pairData.reserve0 * pairData.reserve1);
+            
+            // Ensure we have enough initial liquidity
+            require(initialLiquidity >= 1000, "INSUFFICIENT_INITIAL_LIQUIDITY");
+            
+            liquidity = initialLiquidity - 1000; // Minimum liquidity 最小流动性
             pairData.balances[address(0)] = 1000; // Lock minimum liquidity forever 永久锁定最小流动性
         } else {
             // Subsequent liquidity additions 后续流动性添加
             liquidity = min(
-                (pairData.reserve0 * _totalSupply) / (pairData.reserve0 - pairData.reserve0),
-                (pairData.reserve1 * _totalSupply) / (pairData.reserve1 - pairData.reserve1)
+                (pairData.reserve0 * _totalSupply) / pairData.reserve0,
+                (pairData.reserve1 * _totalSupply) / pairData.reserve1
             );
         }
         
@@ -523,7 +537,10 @@ contract SimpleSwapRouter is Ownable {
             }
         } else if (y != 0) {
             z = 1;
+        } else {
+            revert("SQRT_OF_ZERO");
         }
+        return z;
     }
 
     /**

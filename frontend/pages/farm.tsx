@@ -1075,7 +1075,7 @@ const FarmPage = () => {
   // Handle adding a new pool
   const handleAddPool = async () => {
     if (!isAdmin || !isConnected) {
-      if (!isConnected) {
+    if (!isConnected) {
         setNotification({
           type: 'error',
           message: ft('walletConnectRequired')
@@ -1153,7 +1153,7 @@ const FarmPage = () => {
   // Handle updating pool allocation
   const handleUpdatePool = async () => {
     if (!isAdmin || !isConnected) {
-      if (!isConnected) {
+  if (!isConnected) {
         setNotification({
           type: 'error',
           message: ft('walletConnectRequired')

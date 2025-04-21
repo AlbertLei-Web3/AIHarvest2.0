@@ -1,9 +1,9 @@
 // Sepolia testnet addresses
-export const AIH_TOKEN_ADDRESS = '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9' as const;
+export const AIH_TOKEN_ADDRESS = '0x23572E77d0Ba0893b4d83757eB23137729decd87' as const;
 export const USDC_TOKEN_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const;
-export const ROUTER_ADDRESS = '0xE592427A0AEce92De3Edee1F18E0157C05861564' as const;
-export const FACTORY_ADDRESS = '0x1F98431c8aD98523631AE4a59f267346ea31F984' as const;
-export const FARM_ADDRESS = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f' as const;
+export const ROUTER_ADDRESS = '0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4' as const;
+export const FACTORY_ADDRESS = '0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4' as const;
+export const FARM_ADDRESS = '0x0A309B405f1933E77033Fa98a7CDDf71cbe5c92F' as const;
 
 // Contract addresses object for easy import
 export const contractAddresses = {

@@ -34,12 +34,12 @@ const IERC20ABI = [
 ];
 
 // Testnet contract addresses 测试网合约地址
-export const ROUTER_ADDRESS = "0x29800Bd6193f44E4504af9E6d0A2f9961e15Ad45"; // 部署后替换为实际的SimpleSwapRouter地址
+export const ROUTER_ADDRESS = "0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4"; // SimpleSwapRouter地址
 
 // 注意：部署后，请使用部署生成的AIHToken地址替换AIH的值
 export const TOKENS = {
   ETH: "0xEthTokenAddress",  // 可以保留为占位符或使用Sepolia的ETH代币地址
-  AIH: "0x7E38f7a1c61D11c9E5F3Df8a8006fd4294fD8507",  // 部署后替换为实际的AIH代币地址
+  AIH: "0x23572E77d0Ba0893b4d83757eB23137729decd87",  // AIH代币地址
   USDT: "0xUsdtTokenAddress", // 可以保留为占位符或使用Sepolia的USDT代币地址
   DAI: "0xDaiTokenAddress",   // 可以保留为占位符或使用Sepolia的DAI代币地址
   
@@ -469,37 +469,105 @@ export const addLiquidity = async (
   amountBDesired: string,
   slippageTolerance: number = 0.5 // Default 0.5%
 ): Promise<ethers.providers.TransactionResponse> => {
+  console.log(`\n-------- ADD LIQUIDITY TRANSACTION START --------`);
+  console.log(`Adding liquidity for tokens: ${tokenAAddress} and ${tokenBAddress}`);
+  console.log(`Desired amounts: ${amountADesired} (token A), ${amountBDesired} (token B), Slippage: ${slippageTolerance}%`);
+  
   try {
     const signer = getSigner();
     const signerAddress = await signer.getAddress();
+    console.log(`Using signer address: ${signerAddress}`);
+    
     const router = getRouterContract(signer);
+    console.log(`Router contract retrieved at ${ROUTER_ADDRESS}`);
     
     const tokenAContract = getTokenContract(tokenAAddress, signer);
     const tokenBContract = getTokenContract(tokenBAddress, signer);
     const tokenADecimals = await tokenAContract.decimals();
     const tokenBDecimals = await tokenBContract.decimals();
+    const tokenASymbol = await tokenAContract.symbol();
+    const tokenBSymbol = await tokenBContract.symbol();
+    
+    console.log(`Token A: ${tokenASymbol} (${tokenAAddress}), Decimals: ${tokenADecimals}`);
+    console.log(`Token B: ${tokenBSymbol} (${tokenBAddress}), Decimals: ${tokenBDecimals}`);
     
     const amountAWei = ethers.utils.parseUnits(amountADesired, tokenADecimals);
     const amountBWei = ethers.utils.parseUnits(amountBDesired, tokenBDecimals);
+    
+    console.log(`Amount A in wei: ${amountAWei.toString()}`);
+    console.log(`Amount B in wei: ${amountBWei.toString()}`);
+    
+    // Check if this is a new pair
+    const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+    
+    if (pairAddress === ethers.constants.AddressZero) {
+      console.log(`This is a new pair - creating initial liquidity`);
+      
+      // For a new pair, check if the amount is sufficient for initial liquidity
+      const product = parseFloat(amountADesired) * parseFloat(amountBDesired);
+      const sqrt = Math.sqrt(product);
+      
+      console.log(`Initial liquidity calculation:`);
+      console.log(`Product of amounts: ${product}`);
+      console.log(`Square root (approx. LP tokens): ${sqrt}`);
+      
+      if (sqrt < 1000) {
+        console.error(`INSUFFICIENT_INITIAL_AMOUNTS: Square root ${sqrt} is less than minimum 1000`);
+        throw new Error("INSUFFICIENT_INITIAL_AMOUNTS");
+      }
+      console.log(`Initial liquidity check passed. Minimum requirement (1000) met with ${sqrt.toFixed(2)}`);
+    } else {
+      console.log(`Adding to existing pair at address: ${pairAddress}`);
+      
+      // Get reserves to calculate optimal amounts
+      try {
+        const [reserveA, reserveB] = await router.getReserves(
+          pairAddress,
+          tokenAAddress,
+          tokenBAddress
+        );
+        
+        console.log(`Current reserves: ${ethers.utils.formatUnits(reserveA, tokenADecimals)} ${tokenASymbol}, ${ethers.utils.formatUnits(reserveB, tokenBDecimals)} ${tokenBSymbol}`);
+        
+        // Check if one of the reserves is zero (broken pair)
+        if (reserveA.isZero() !== reserveB.isZero()) {
+          console.error(`Unbalanced reserves: One token has zero reserve, the other doesn't`);
+          console.error(`Reserve A: ${reserveA.toString()}, Reserve B: ${reserveB.toString()}`);
+          throw new Error("UNBALANCED_RESERVES");
+        }
+      } catch (error) {
+        console.error("Error getting reserves:", error);
+        throw new Error(`Failed to get reserves: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
     
     // Calculate minimum amounts based on slippage 根据滑点计算最小数量
     const amountAMin = amountAWei.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
     const amountBMin = amountBWei.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
     
+    console.log(`Minimum amounts (with slippage): ${ethers.utils.formatUnits(amountAMin, tokenADecimals)} ${tokenASymbol}, ${ethers.utils.formatUnits(amountBMin, tokenBDecimals)} ${tokenBSymbol}`);
+    
     // Check allowances 检查授权
     const allowanceA = await tokenAContract.allowance(signerAddress, ROUTER_ADDRESS);
     const allowanceB = await tokenBContract.allowance(signerAddress, ROUTER_ADDRESS);
     
+    console.log(`Token A allowance: ${ethers.utils.formatUnits(allowanceA, tokenADecimals)} ${tokenASymbol}`);
+    console.log(`Token B allowance: ${ethers.utils.formatUnits(allowanceB, tokenBDecimals)} ${tokenBSymbol}`);
+    
     if (allowanceA.lt(amountAWei)) {
-      throw new Error(`Insufficient allowance for ${await tokenAContract.symbol()}. Please approve first.`);
+      console.error(`Insufficient allowance for ${tokenASymbol}: ${ethers.utils.formatUnits(allowanceA, tokenADecimals)} < ${amountADesired}`);
+      throw new Error(`Insufficient allowance for ${tokenASymbol}. Please approve first.`);
     }
     
     if (allowanceB.lt(amountBWei)) {
-      throw new Error(`Insufficient allowance for ${await tokenBContract.symbol()}. Please approve first.`);
+      console.error(`Insufficient allowance for ${tokenBSymbol}: ${ethers.utils.formatUnits(allowanceB, tokenBDecimals)} < ${amountBDesired}`);
+      throw new Error(`Insufficient allowance for ${tokenBSymbol}. Please approve first.`);
     }
     
+    console.log(`Allowance checks passed. Executing addLiquidity...`);
+    
     // Add liquidity 添加流动性
-    return router.addLiquidity(
+    const tx = await router.addLiquidity(
       tokenAAddress,
       tokenBAddress,
       amountAWei,
@@ -508,8 +576,13 @@ export const addLiquidity = async (
       amountBMin,
       signerAddress
     );
+    
+    console.log(`Transaction submitted with hash: ${tx.hash}`);
+    console.log(`-------- ADD LIQUIDITY TRANSACTION END --------\n`);
+    return tx;
   } catch (error) {
     console.error("Error adding liquidity:", error);
+    console.log(`-------- ADD LIQUIDITY TRANSACTION FAILED --------\n`);
     throw error;
   }
 };

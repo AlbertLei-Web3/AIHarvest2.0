@@ -83,6 +83,8 @@ interface LiquidityTranslation {
   approving: string;
   addingLiquidity: string;
   processing: string;
+  initialLiquidityWarning: string;
+  initialLiquidityWarningText: string;
 }
 
 interface LiquidityTranslationsType {
@@ -225,31 +227,33 @@ const LiquidityPage = () => {
       walletWarning: 'Please connect your wallet to add liquidity',
       addButton: 'Add Liquidity',
       selectToken: 'Select Token',
-      searchPlaceholder: 'Search token name or address',
+      searchPlaceholder: 'Search token by name or address',
       settings: 'Settings',
       myLiquidityPositions: 'My Liquidity Positions',
-      noPositions: 'You don\'t have any liquidity positions yet',
+      noPositions: 'No liquidity positions found',
       pooled: 'Pooled',
-      yourShare: 'Your Share',
+      yourShare: 'Your share',
       add: 'Add',
       remove: 'Remove',
       pleaseConnectWallet: 'Please connect your wallet',
-      removingLiquidity: 'Removing liquidity',
-      liquidityAmount: 'Liquidity amount',
+      removingLiquidity: 'Removing Liquidity',
+      liquidityAmount: 'Liquidity Amount',
       transactionSubmitted: 'Transaction submitted',
       transactionConfirmed: 'Transaction confirmed',
-      liquidityRemoved: 'Liquidity successfully removed!',
-      checkWalletBalance: 'Please check your wallet balance changes.',
-      removeLiquidityError: 'Remove liquidity failed',
-      unknownError: 'Unknown error',
-      blockHeight: 'Block height',
-      approved: 'approved',
+      liquidityRemoved: 'Liquidity removed successfully',
+      checkWalletBalance: 'Please check your wallet balance',
+      removeLiquidityError: 'Error removing liquidity',
+      unknownError: 'An unknown error occurred',
+      blockHeight: 'Block Height',
+      approved: 'Approved',
       error: 'Error',
-      liquidityAdded: 'Liquidity Added Successfully',
+      liquidityAdded: 'Liquidity added successfully',
       success: 'Success',
       approving: 'Approving',
       addingLiquidity: 'Adding liquidity',
-      processing: 'Processing'
+      processing: 'Processing',
+      initialLiquidityWarning: 'Minimum Initial Liquidity Required',
+      initialLiquidityWarningText: 'For new pools, you must provide enough tokens so that the square root of (amount1 × amount2) is at least 1000. The recommended minimum is 5000 of each token for a new pool. Add enough liquidity to meet this requirement, otherwise the transaction will fail.'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -258,15 +262,15 @@ const LiquidityPage = () => {
       balance: '余额',
       connectWallet: '连接钱包',
       lpTokensReceive: '您将收到的LP代币：',
-      shareOfPool: '池子份额：',
-      walletWarning: '请连接您的钱包来添加流动性',
+      shareOfPool: '池中份额：',
+      walletWarning: '请连接您的钱包以添加流动性',
       addButton: '添加流动性',
       selectToken: '选择代币',
-      searchPlaceholder: '搜索代币名称或地址',
+      searchPlaceholder: '按名称或地址搜索代币',
       settings: '设置',
-      myLiquidityPositions: '我的流动性仓位',
-      noPositions: '您还没有任何流动性仓位',
-      pooled: '已存入',
+      myLiquidityPositions: '我的流动性持仓',
+      noPositions: '未找到流动性持仓',
+      pooled: '已池化',
       yourShare: '您的份额',
       add: '添加',
       remove: '移除',
@@ -275,10 +279,10 @@ const LiquidityPage = () => {
       liquidityAmount: '流动性数量',
       transactionSubmitted: '交易已提交',
       transactionConfirmed: '交易已确认',
-      liquidityRemoved: '流动性已成功移除!',
-      checkWalletBalance: '请检查您的钱包余额变化。',
-      removeLiquidityError: '移除流动性失败',
-      unknownError: '未知错误',
+      liquidityRemoved: '流动性已成功移除',
+      checkWalletBalance: '请检查您的钱包余额',
+      removeLiquidityError: '移除流动性出错',
+      unknownError: '发生未知错误',
       blockHeight: '区块高度',
       approved: '已批准',
       error: '错误',
@@ -286,7 +290,9 @@ const LiquidityPage = () => {
       success: '成功',
       approving: '批准中',
       addingLiquidity: '添加流动性中',
-      processing: '处理中'
+      processing: '处理中',
+      initialLiquidityWarning: '需要最小初始流动性',
+      initialLiquidityWarningText: '对于新池，您必须提供足够的代币，使得（数量1 × 数量2）的平方根至少为1000。新池的建议最小值是每种代币5000。添加足够的流动性以满足此要求，否则交易将失败。'
     }
   };
   
@@ -570,11 +576,24 @@ const LiquidityPage = () => {
       let errorMessage = 'An unexpected error occurred';
       
       if (error instanceof Error) {
-        // Check if it's an allowance error
+        // Handle specific errors with user-friendly messages
         if (error.message.includes('allowance')) {
           errorMessage = 'Please approve the tokens first';
+        } else if (error.message.includes('INSUFFICIENT_INITIAL_LIQUIDITY') || 
+                  error.message.includes('INSUFFICIENT_INITIAL_AMOUNTS')) {
+          errorMessage = 'Initial liquidity too low. Please provide at least 5000 of each token for new pools.';
+        } else if (error.message.includes('ZERO_RESERVES')) {
+          errorMessage = 'Internal error: Zero reserves. Please try with larger amounts.';
+        } else if (error.message.includes('INSUFFICIENT_LIQUIDITY_MINTED')) {
+          errorMessage = 'Not enough LP tokens would be minted. Try adding more tokens.';
         } else {
-          errorMessage = error.message;
+          // Extract the revert reason if it's an EVM error
+          const revertMatch = error.message.match(/reason="([^"]+)"/);
+          if (revertMatch && revertMatch[1]) {
+            errorMessage = revertMatch[1];
+          } else {
+            errorMessage = error.message;
+          }
         }
       }
       
@@ -921,6 +940,23 @@ const LiquidityPage = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
+            </div>
+          </div>
+          
+          {/* Minimum Liquidity Warning */}
+          <div className="bg-yellow-900/40 border border-yellow-600/50 rounded-lg p-4 mb-4 text-yellow-200 text-sm">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="font-medium">{lt('initialLiquidityWarning')}</h3>
+                <div className="mt-2">
+                  <p>{lt('initialLiquidityWarningText')}</p>
+                </div>
+              </div>
             </div>
           </div>
           
