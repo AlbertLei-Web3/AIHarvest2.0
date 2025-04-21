@@ -5,6 +5,15 @@ export const ROUTER_ADDRESS = '0xE592427A0AEce92De3Edee1F18E0157C05861564' as co
 export const FACTORY_ADDRESS = '0x1F98431c8aD98523631AE4a59f267346ea31F984' as const;
 export const FARM_ADDRESS = '0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f' as const;
 
+// Contract addresses object for easy import
+export const contractAddresses = {
+  aihToken: AIH_TOKEN_ADDRESS,
+  usdc: USDC_TOKEN_ADDRESS, 
+  router: ROUTER_ADDRESS,
+  factory: FACTORY_ADDRESS,
+  farm: FARM_ADDRESS
+};
+
 // Token list
 export const TOKENS = {
   ETH: {
