@@ -16,7 +16,10 @@ A decentralized platform for token swapping, liquidity provision, and yield farm
   - useSimpleSwap - Interact with the swap router
   - useSimpleFarm - Interact with the farming contract
 - ✅ Swap interface connected to contracts
-- ⏳ Liquidity interface connected to contracts
+- ✅ Liquidity interface connected to contracts
+  - Add/remove liquidity functionality
+  - Liquidity position management
+  - Pair address verification
 - ⏳ Farm interface connected to contracts
 
 ## Contract Integration
@@ -66,13 +69,6 @@ The project follows a layered architecture:
 - Backend services (Express.js)
 - Frontend application (Next.js)
 
-## Next Steps
-
-- Complete contract integration for liquidity and farming interfaces
-- Implement user positions tracking
-- Add transaction history
-- Develop analytics dashboard
-
 ## Core Smart Contracts
 
 We have implemented the three core smart contracts as specified in the project foundation document:
@@ -84,25 +80,53 @@ We have implemented the three core smart contracts as specified in the project f
    - Farm allocation for rewards
 
 2. **SimpleSwapRouter**: DEX router for token swapping and liquidity provision
-   - Create token pairs
-   - Add and remove liquidity
-   - Swap tokens with fee mechanism
+   - Create token pairs with deterministic addresses
+   - Add and remove liquidity with optimal amount calculation
+   - Swap tokens with fee mechanism (0.3% default fee)
    - AMM based on constant product formula (x*y=k)
+   - Protocol fee collection (1/6 of fees)
 
 3. **SimpleFarm**: LP token staking with AIH token rewards
    - Multiple pools for different LP tokens
    - Flexible reward allocation
-   - Time-based reward distribution
+   - Time-based reward distribution (0.1 AIH per second default)
    - Emergency withdrawal option
 
-## Architecture
+## Pair Creation Mechanism
 
-The architecture consists of four main layers:
+The SimpleSwapRouter implements a deterministic pair creation system:
 
-1. **Smart Contract Layer**: Contains AIH Token, SimpleSwapRouter, and SimpleFarm contracts
-2. **Indexing Layer**: Uses The Graph for event indexing and GraphQL API for data queries
-3. **Backend Layer**: Express API with Redis cache and MongoDB for user data
-4. **Frontend Layer**: Next.js application with React components and Ethers.js for blockchain interaction
+1. Pair addresses are computed using a hash formula: `keccak256(ff + router_address + keccak256(token0 + token1) + init_code_hash)`
+2. Token addresses are sorted to ensure consistent pairs (smaller address becomes token0)
+3. Pairs are registered in a bidirectional mapping for efficient lookup
+4. Initial liquidity requires a minimum threshold to prevent dust positions
+
+## Liquidity Management
+
+The platform provides a complete liquidity management system:
+
+1. **Adding Liquidity**:
+   - Select token pairs
+   - Approve token spending
+   - Receive LP tokens representing pool share
+   - First liquidity provider sets the initial price ratio
+
+2. **Managing Positions**:
+   - View all liquidity positions in a user-friendly interface
+   - See detailed information including token amounts and pool share
+   - Verify pair addresses for additional security
+
+3. **Removing Liquidity**:
+   - Remove part or all of a position
+   - Configurable slippage tolerance
+   - Receive underlying tokens back proportional to pool share
+
+## Next Steps
+
+- Complete contract integration for farming interface
+- Implement user positions tracking
+- Add transaction history
+- Develop analytics dashboard
 
 ## Project Structure
 
@@ -118,9 +142,14 @@ aiharvest/
 │   ├── components/          # Reusable components
 │   ├── hooks/               # Custom hooks
 │   ├── pages/               # Page components
+│   │   ├── swap.tsx         # Token swap interface
+│   │   ├── liquidity.tsx    # Liquidity management interface
+│   │   └── farm.tsx         # Farming interface
+│   ├── utils/               # Utility functions
+│   │   └── contracts.ts     # Contract interaction functions
 │   ├── public/              # Static assets
 │   ├── styles/              # Style files
-│   └── utils/               # Utility functions
+│   └── diagrams/            # Flow diagrams
 │
 ├── backend/                 # Backend service
 │   ├── api/                 # API routes
@@ -184,51 +213,26 @@ aiharvest/
    npx hardhat node
    ```
 
-## Development Workflow
+## Process Flows
 
-1. **Smart Contracts**: Edit Solidity files in the `contracts/` directory and run tests with `npm test`
-2. **Frontend**: Modify React components and pages in the `frontend/` directory
-3. **Backend**: Update API endpoints and services in the `backend/` directory
-4. **Subgraph**: Update GraphQL schema and mappings in the `subgraph/` directory
+The project includes detailed flow diagrams for key processes:
 
-## CI/CD Pipeline
+1. **Liquidity Provision Flow**: Visualizes the complete process of adding liquidity
+2. **Pair Creation Mechanism**: Illustrates how pair addresses are deterministically generated
+3. **Token Swap Flow**: Shows the path of token exchange through the router
 
-The project uses GitHub Actions for continuous integration and deployment:
-
-1. **CI**: On push or PR to main/develop branches:
-   - Contract linting and testing
-   - Frontend build and lint
-   - Backend testing
-
-2. **CD**: On push to main branch:
-   - Frontend deployment to Vercel
-   - Backend container build and deployment
-   - Contract deployment to testnet (if enabled)
-
-### Manual Deployment
-
-To deploy the application manually to production:
-
-```
-# Set required environment variables
-export INFURA_API_KEY=your_infura_key
-export PRIVATE_KEY=your_private_key
-export DEPLOY_CONTRACTS=true  # Optional
-export DEPLOY_SUBGRAPH=true   # Optional
-
-# Run the deployment script
-chmod +x scripts/deploy-prod.sh
-./scripts/deploy-prod.sh
-```
+These diagrams help developers understand the system architecture and aid in further development.
 
 ## Features
 
 1. **Connect Wallet**: Connect your Ethereum wallet to the platform
 2. **Swap Tokens**: Exchange tokens with minimal slippage
 3. **Add Liquidity**: Provide liquidity to earn trading fees
-4. **Stake LP Tokens**: Stake your LP tokens to earn AIH rewards
-5. **Harvest Rewards**: Claim your earned AIH tokens
-6. **Withdraw Stake**: Unstake your LP tokens
+4. **Manage Positions**: View and manage your liquidity positions
+5. **Stake LP Tokens**: Stake your LP tokens to earn AIH rewards
+6. **Harvest Rewards**: Claim your earned AIH tokens
+7. **Withdraw Stake**: Unstake your LP tokens
+8. **Verify Positions**: Verify the authenticity of your liquidity positions
 
 ## License
 

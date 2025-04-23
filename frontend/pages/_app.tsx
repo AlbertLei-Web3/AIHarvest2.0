@@ -5,14 +5,20 @@ import { createConfig, WagmiConfig } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http } from 'viem';
+import { injected } from 'wagmi/connectors';
 import dynamic from 'next/dynamic';
+
+console.log('Creating Wagmi config...'); // 添加调试日志
 
 // Create wagmi config for v2
 const config = createConfig({
   chains: [sepolia],
   transports: {
     [sepolia.id]: http()
-  }
+  },
+  connectors: [
+    injected()
+  ]
 });
 
 // Create a client
@@ -20,6 +26,14 @@ const queryClient = new QueryClient();
 
 // Main App component
 function App({ Component, pageProps }: AppProps) {
+  // 检查window.ethereum是否存在
+  if (typeof window !== 'undefined') {
+    console.log('window.ethereum exists:', !!window.ethereum);
+    if (window.ethereum) {
+      console.log('MetaMask detected:', !!window.ethereum.isMetaMask);
+    }
+  }
+
   return (
     <WagmiConfig config={config}>
       <QueryClientProvider client={queryClient}>

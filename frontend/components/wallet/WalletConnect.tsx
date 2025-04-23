@@ -67,17 +67,64 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => 
   // Fix hydration mismatch by only rendering after client-side mount
   useEffect(() => {
     setMounted(true);
+    
+    // Check for wallet after mounting
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        console.log('🌐 Check wallet provider:', {
+          hasEthereum: !!window.ethereum,
+          hasMetaMask: !!window.ethereum?.isMetaMask,
+          version: window.ethereum?.version || 'unknown'
+        });
+      }, 1000); // Slight delay to ensure extension has time to inject
+    }
   }, []);
 
   const handleConnect = async () => {
+    console.log('Connect button clicked');
     setIsConnecting(true);
     try {
+      console.log('Available connectors:', connectors);
+      
+      // 检查MetaMask状态
+      if (typeof window !== 'undefined' && window.ethereum) {
+        console.log('MetaMask status:', {
+          isMetaMask: window.ethereum.isMetaMask,
+          isConnected: window.ethereum.isConnected?.() || false,
+          selectedAddress: window.ethereum.selectedAddress
+        });
+      }
+      
+      // 尝试使用connector连接
       const connector = connectors.find(c => c.ready);
       if (connector) {
+        console.log('Using connector:', connector.name);
         await connect({ connector });
+      } 
+      // 如果没有ready的connector但检测到MetaMask，尝试手动请求账户
+      else if (typeof window !== 'undefined' && window.ethereum) {
+        console.log('No ready connectors, but MetaMask detected. Trying direct connection...');
+        try {
+          // 尝试直接请求MetaMask连接
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          if (accounts && accounts.length > 0) {
+            console.log('Successfully connected with address:', accounts[0]);
+            // 成功后刷新页面应用连接状态
+            window.location.reload();
+            return;
+          }
+        } catch (metaMaskError) {
+          console.error('Direct MetaMask connection failed:', metaMaskError);
+          throw metaMaskError;
+        }
+      } 
+      else {
+        console.error('No ready connectors found and no MetaMask detected');
+        alert('没有可用的钱包连接器。请确保安装并解锁MetaMask。');
       }
     } catch (error) {
       console.error('Failed to connect wallet:', error);
+      alert('连接钱包失败: ' + (error instanceof Error ? error.message : String(error)));
     } finally {
       setIsConnecting(false);
     }
