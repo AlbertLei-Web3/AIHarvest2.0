@@ -1,14 +1,12 @@
 // Sepolia testnet addresses
-export const AIH_TOKEN_ADDRESS = '0x23572E77d0Ba0893b4d83757eB23137729decd87' as const;
-export const USDC_TOKEN_ADDRESS = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48' as const;
-export const ROUTER_ADDRESS = '0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4' as const;
-export const FACTORY_ADDRESS = '0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4' as const;
-export const FARM_ADDRESS = '0x0A309B405f1933E77033Fa98a7CDDf71cbe5c92F' as const;
+export const AIH_TOKEN_ADDRESS = '0xdc9bef9f72Fa0099A757a5f11f31B90DC7D89C8F' as const;
+export const ROUTER_ADDRESS = '0xDc61cE373D3d005d2C20467C87f5481D1471616e' as const;
+export const FACTORY_ADDRESS = '0xDc61cE373D3d005d2C20467C87f5481D1471616e' as const;
+export const FARM_ADDRESS = '0xf9D52f36e685b6184FBB09926c93696aF26bD720' as const;
 
 // Contract addresses object for easy import
 export const contractAddresses = {
   aihToken: AIH_TOKEN_ADDRESS,
-  usdc: USDC_TOKEN_ADDRESS, 
   router: ROUTER_ADDRESS,
   factory: FACTORY_ADDRESS,
   farm: FARM_ADDRESS
@@ -29,12 +27,5 @@ export const TOKENS = {
     decimals: 18,
     address: AIH_TOKEN_ADDRESS,
     logo: '/assets/tokens/aih.png'
-  },
-  USDC: {
-    name: 'USD Coin',
-    symbol: 'USDC',
-    decimals: 6,
-    address: USDC_TOKEN_ADDRESS,
-    logo: '/assets/tokens/usdc.png'
   }
 }; 

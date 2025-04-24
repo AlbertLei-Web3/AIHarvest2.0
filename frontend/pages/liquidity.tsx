@@ -14,7 +14,8 @@ import {
   approveLPToken,
   getRouterContract,
   getTokenContract,
-  createTokenPair
+  createTokenPair,
+  addLPTokenToWallet
 } from '@/utils/contracts';
 import { ethers } from 'ethers';
 
@@ -86,6 +87,9 @@ interface LiquidityTranslation {
   initialLiquidityWarning: string;
   initialLiquidityWarningText: string;
   pairAddress: string;
+  copy: string;
+  lpTokenBalance: string;
+  addToWallet: string;
 }
 
 interface LiquidityTranslationsType {
@@ -94,7 +98,7 @@ interface LiquidityTranslationsType {
   [key: string]: LiquidityTranslation;
 }
 
-// Token data 
+// Updated token data - removed USDT, DAI and kept custom tokens
 const tokensData: TokensType = {
   eth: {
     name: 'Ethereum',
@@ -111,22 +115,6 @@ const tokensData: TokensType = {
     balance: '0',
     decimals: 18,
     address: TOKENS.AIH
-  },
-  usdt: {
-    name: 'Tether USD',
-    symbol: 'USDT',
-    logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
-    balance: '0',
-    decimals: 6,
-    address: TOKENS.USDT
-  },
-  dai: {
-    name: 'Dai Stablecoin',
-    symbol: 'DAI',
-    logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-    balance: '0',
-    decimals: 18,
-    address: TOKENS.DAI
   },
   td: {
     name: 'TD Token',
@@ -170,14 +158,19 @@ const tokensData: TokensType = {
   }
 };
 
-// Exchange rates between tokens
+// Update exchange rates to only include relevant pairs
 const exchangeRates: ExchangeRatesType = {
   'eth_aih': 1000,
-  'eth_usdt': 1800,
-  'eth_dai': 1800,
-  'aih_usdt': 1.8,
-  'aih_dai': 1.8,
-  'usdt_dai': 1
+  'eth_td': 100,
+  'eth_fhbi': 100,
+  'eth_fhbi2': 100,
+  'eth_fhbi3': 100,
+  'eth_rtk': 100,
+  'aih_td': 10,
+  'aih_fhbi': 10,
+  'aih_fhbi2': 10,
+  'aih_fhbi3': 10,
+  'aih_rtk': 10
 };
 
 const LiquidityPage = () => {
@@ -255,7 +248,10 @@ const LiquidityPage = () => {
       processing: 'Processing',
       initialLiquidityWarning: 'Minimum Initial Liquidity Required',
       initialLiquidityWarningText: 'For new pools, you must provide enough tokens so that the square root of (amount1 × amount2) is at least 1000. The recommended minimum is 5000 of each token for a new pool. Add enough liquidity to meet this requirement, otherwise the transaction will fail.',
-      pairAddress: 'Pair Address'
+      pairAddress: 'Pair Address',
+      copy: 'Copy',
+      lpTokenBalance: 'LP Token Balance',
+      addToWallet: 'Add to Wallet'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -288,14 +284,17 @@ const LiquidityPage = () => {
       blockHeight: '区块高度',
       approved: '已批准',
       error: '错误',
-      liquidityAdded: '流动性添加成功',
+      liquidityAdded: '流动性已成功添加',
       success: '成功',
-      approving: '批准中',
-      addingLiquidity: '添加流动性中',
+      approving: '正在批准',
+      addingLiquidity: '正在添加流动性',
       processing: '处理中',
-      initialLiquidityWarning: '需要最小初始流动性',
-      initialLiquidityWarningText: '对于新池，您必须提供足够的代币，使得（数量1 × 数量2）的平方根至少为1000。新池的建议最小值是每种代币5000。添加足够的流动性以满足此要求，否则交易将失败。',
-      pairAddress: '配对地址'
+      initialLiquidityWarning: '初始流动性警告',
+      initialLiquidityWarningText: '创建新的流动性池时，需要提供足够的代币作为初始LP代币。代币数量的乘积必须足够高。',
+      pairAddress: '交易对地址',
+      copy: '复制',
+      lpTokenBalance: 'LP代币余额',
+      addToWallet: '添加到钱包'
     }
   };
   
@@ -308,43 +307,75 @@ const LiquidityPage = () => {
   // Handle client-side rendering to prevent hydration mismatch
   useEffect(() => {
     setMounted(true);
+    
+    // Direct immediate refresh once when component mounts
+    const immediateRefresh = async () => {
+      if (isConnected && address) {
+        try {
+          console.log("Initial positions refresh on mount");
+          await refreshPositions();
+        } catch (error) {
+          console.error("Error during initial positions refresh:", error);
+        }
+      }
+    };
+    
+    setTimeout(immediateRefresh, 1000); // Slight delay to ensure wallet is fully connected
   }, []);
   
   // Fetch token balances and user positions when connected
   useEffect(() => {
     const fetchData = async () => {
-      if (isConnected && address && mounted) {
-        try {
-          // Update token balances
-          const updatedTokens = { ...tokens };
-          
-          for (const [key, token] of Object.entries(tokens)) {
-            try {
-              const balance = await getTokenBalance(token.address, address);
-              updatedTokens[key] = { ...token, balance };
-            } catch (error) {
-              console.error(`Error fetching balance for ${token.symbol}:`, error);
-            }
-          }
-          
-          setTokens(updatedTokens);
-          
-          // Get pair reserves
+      console.log("Fetch data function called");
+      
+      if (!isConnected) {
+        console.log("Not connected, skipping data fetch");
+        return;
+      }
+      
+      if (!address) {
+        console.log("No address available, skipping data fetch");
+        return;
+      }
+      
+      if (!mounted) {
+        console.log("Component not mounted, skipping data fetch");
+        return;
+      }
+      
+      try {
+        console.log("Fetching data for connected wallet:", address);
+        
+        // Update token balances
+        const updatedTokens = { ...tokens };
+        
+        for (const [key, token] of Object.entries(tokens)) {
           try {
-            const reserves = await getPairReserves(
-              tokens[tokenA].address,
-              tokens[tokenB].address
-            );
-            setPairReserves(reserves);
+            const balance = await getTokenBalance(token.address, address);
+            console.log(`Token ${key} balance: ${balance}`);
+            updatedTokens[key] = { ...token, balance };
           } catch (error) {
-            console.error("Error fetching pair reserves:", error);
+            console.error(`Error fetching balance for ${token.symbol}:`, error);
           }
-          
-          // Fetch user's liquidity positions using the dedicated function
-          await refreshPositions();
-        } catch (error) {
-          console.error("Error fetching data:", error);
         }
+        
+        setTokens(updatedTokens);
+        
+        // Get pair reserves
+        try {
+          const reserves = await getPairReserves(
+            tokens[tokenA].address,
+            tokens[tokenB].address
+          );
+          setPairReserves(reserves);
+        } catch (error) {
+          console.error("Error fetching pair reserves:", error);
+        }
+        
+        // Fetch user's liquidity positions using the dedicated function
+        await refreshPositions();
+      } catch (error) {
+        console.error("Error fetching data:", error);
       }
     };
     
@@ -625,32 +656,87 @@ const LiquidityPage = () => {
   
   // Add a dedicated function to refresh positions
   const refreshPositions = async (): Promise<void> => {
-    if (!isConnected || !address || !mounted) return;
+    console.log("Starting position refresh...");
+    
+    if (!address) {
+      console.error("No wallet address available, cannot refresh positions");
+      return;
+    }
     
     try {
-      // Create all possible token pairs for checking positions
+      // 首先确保钱包连接
+      if (window.ethereum) {
+        try {
+          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+          if (!accounts || accounts.length === 0) {
+            console.log("No active account, trying to reconnect...");
+            await window.ethereum.request({ method: 'eth_requestAccounts' });
+          }
+        } catch (error) {
+          console.error("Error checking/reconnecting wallet:", error);
+        }
+      }
+      
+      console.log("Rebuilding token pairs for checking liquidity positions...");
+      
+      // 创建所有可能的代币对
       const possiblePairs: [string, string][] = [];
       const tokenEntries = Object.entries(tokens);
       
-      console.log("Token entries for positions check:", tokenEntries.map(entry => `${entry[0]}: ${entry[1].address}`));
+      // 首先添加特别关注的两个代币对
+      if (TOKENS.TD && TOKENS.FHBI) {
+        possiblePairs.push([TOKENS.TD, TOKENS.FHBI]); // TD-FHBI
+        console.log("Added special pair: TD-FHBI");
+      }
       
+      if (TOKENS.FHBI2 && TOKENS.FHBI3) {
+        possiblePairs.push([TOKENS.FHBI2, TOKENS.FHBI3]); // FHBI2-FHBI3
+        console.log("Added special pair: FHBI2-FHBI3");
+      }
+      
+      // 记录创建的所有其他对
       for (let i = 0; i < tokenEntries.length; i++) {
         for (let j = i + 1; j < tokenEntries.length; j++) {
-          const pair: [string, string] = [
-            tokenEntries[i][1].address,
-            tokenEntries[j][1].address
-          ];
-          possiblePairs.push(pair);
-          console.log(`Created possible pair: ${tokenEntries[i][0]}-${tokenEntries[j][0]}`);
+          // 获取代币地址
+          const tokenA = tokenEntries[i][1].address;
+          const tokenB = tokenEntries[j][1].address;
+          
+          // 检查地址有效性
+          if (tokenA && tokenB && tokenA !== ethers.constants.AddressZero && tokenB !== ethers.constants.AddressZero) {
+            // 检查这个对是否已经在列表中
+            const alreadyExists = possiblePairs.some(
+              existingPair => 
+                (existingPair[0] === tokenA && existingPair[1] === tokenB) || 
+                (existingPair[0] === tokenB && existingPair[1] === tokenA)
+            );
+            
+            if (!alreadyExists) {
+              possiblePairs.push([tokenA, tokenB]);
+              console.log(`Created pair: ${tokenEntries[i][0]}-${tokenEntries[j][0]}`);
+            }
+          }
         }
       }
       
       console.log(`Checking ${possiblePairs.length} possible pairs for user ${address}`);
+      
+      // 获取用户流动性位置
       const userPositions = await getUserLiquidityPositions(address, possiblePairs);
       console.log("Fetched positions:", userPositions);
-      setPositions(userPositions);
+      
+      if (userPositions.length > 0) {
+        console.log(`Found ${userPositions.length} positions, updating state...`);
+        // 重要：使用新的数组引用确保React检测到变化
+        setPositions([...userPositions]);
+      } else {
+        console.log("No positions found");
+        setPositions([]);
+      }
+      
+      return;
     } catch (error) {
       console.error("Error refreshing positions:", error);
+      // 错误情况下，尝试保持现有状态
     }
   };
   
@@ -878,6 +964,122 @@ const LiquidityPage = () => {
   const hideLoading = () => {
     setLoading(false);
     setShowNotification(false);
+  };
+
+  // Add monitoring for positions state changes
+  useEffect(() => {
+    console.log("Positions state changed:", positions.length > 0 ? "Has positions" : "No positions");
+  }, [positions]);
+
+  // Add debug button in header area
+  const debugWalletAndData = async () => {
+    try {
+      console.log("Debug: Checking wallet status");
+      if (!isConnected || !address) {
+        console.error("Wallet not connected or no address available");
+        return;
+      }
+
+      console.log("Connected wallet address:", address);
+      console.log("Window ethereum status:", {
+        isMetaMask: window.ethereum?.isMetaMask,
+        selectedAddress: window.ethereum?.selectedAddress,
+        isConnected: window.ethereum?.isConnected?.()
+      });
+
+      // Check token balances directly
+      for (const [key, token] of Object.entries(tokens)) {
+        try {
+          const balance = await getTokenBalance(token.address, address);
+          console.log(`Token ${token.symbol} balance:`, balance);
+        } catch (error) {
+          console.error(`Error getting ${token.symbol} balance:`, error);
+        }
+      }
+
+      // Try direct fetch of positions
+      try {
+        await refreshPositions();
+        console.log("Positions after refresh:", positions);
+      } catch (error) {
+        console.error("Error refreshing positions:", error);
+      }
+    } catch (error) {
+      console.error("Debug error:", error);
+    }
+  };
+
+  // Add reconnect and force refresh function
+  const reconnectAndRefresh = async () => {
+    try {
+      console.log("Attempting to reconnect wallet and force refresh data");
+      
+      // 强制重连钱包
+      if (window.ethereum) {
+        try {
+          // 请求账户连接
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+          console.log("Accounts after reconnect:", accounts);
+          
+          // 获取网络ID
+          const chainId = await window.ethereum.request({ method: 'eth_chainId' });
+          console.log("Current chain ID:", chainId);
+          
+          // 短暂延迟后刷新页面数据
+          setTimeout(async () => {
+            try {
+              // 强制刷新代币余额
+              const updatedTokens = { ...tokens };
+              
+              for (const [key, token] of Object.entries(tokens)) {
+                try {
+                  if (accounts[0]) {
+                    const balance = await getTokenBalance(token.address, accounts[0]);
+                    updatedTokens[key] = { ...token, balance };
+                    console.log(`Updated ${token.symbol} balance: ${balance}`);
+                  }
+                } catch (error) {
+                  console.error(`Error updating ${token.symbol} balance:`, error);
+                }
+              }
+              
+              setTokens(updatedTokens);
+              
+              // 刷新流动性位置
+              await refreshPositions();
+            } catch (error) {
+              console.error("Error in delayed refresh:", error);
+            }
+          }, 1000);
+        } catch (error) {
+          console.error("Error reconnecting wallet:", error);
+        }
+      } else {
+        console.error("No ethereum provider found");
+      }
+    } catch (error) {
+      console.error("Error in reconnect function:", error);
+    }
+  };
+
+  // Add handleAddLPTokenToWallet function
+  const handleAddLPTokenToWallet = async (position: LiquidityPosition): Promise<void> => {
+    try {
+      showLoading(`Adding ${position.tokenASymbol}-${position.tokenBSymbol} LP token to wallet...`);
+      
+      const success = await addLPTokenToWallet(position.tokenA, position.tokenB);
+      
+      if (success) {
+        hideLoading();
+        showSuccess(`${position.tokenASymbol}-${position.tokenBSymbol} LP token added to wallet`);
+      } else {
+        hideLoading();
+        showError('Failed to add LP token to wallet');
+      }
+    } catch (error: any) {
+      hideLoading();
+      showError(`Error adding LP token to wallet: ${error.message || 'Unknown error'}`);
+    }
   };
 
   return (
@@ -1139,7 +1341,35 @@ const LiquidityPage = () => {
         
         {/* My Liquidity Positions */}
         <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10">
-          <h2 className="text-xl font-bold text-white mb-4">{lt('myLiquidityPositions')}</h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white">{lt('myLiquidityPositions')}</h2>
+            <div className="flex space-x-2">
+              <button 
+                className="text-sm bg-purple-900/30 text-purple-400 px-3 py-1 rounded hover:bg-purple-900/50 transition"
+                onClick={reconnectAndRefresh}
+              >
+                Reconnect
+              </button>
+              <button 
+                className="text-sm bg-red-900/30 text-red-400 px-3 py-1 rounded hover:bg-red-900/50 transition"
+                onClick={debugWalletAndData}
+              >
+                Debug
+              </button>
+              <button 
+                className="text-sm bg-blue-900/30 text-blue-400 px-3 py-1 rounded hover:bg-blue-900/50 transition"
+                onClick={async () => {
+                  try {
+                    await refreshPositions();
+                  } catch (err) {
+                    console.error("Error refreshing positions:", err);
+                  }
+                }}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
           
           {positions.length === 0 ? (
             <div className="text-center py-8 bg-dark-default rounded-lg">
@@ -1196,8 +1426,32 @@ const LiquidityPage = () => {
                       </div>
                     </div>
                     <div className="mt-1 pt-1 border-t border-gray-700">
-                      <div className="text-xs text-gray-400 mt-1">{lt('pairAddress')}:</div>
-                      <div className="text-xs text-blue-400 break-all">{position.pairAddress}</div>
+                      <div className="flex justify-between items-center mt-1">
+                        <div className="text-xs text-gray-400">{lt('pairAddress')}:</div>
+                        <button 
+                          className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded hover:bg-blue-900/50 transition"
+                          onClick={() => {
+                            navigator.clipboard.writeText(position.pairAddress)
+                              .then(() => console.log("Address copied"))
+                              .catch(err => console.error("Copy failed:", err));
+                          }}
+                        >
+                          {lt('copy')}
+                        </button>
+                      </div>
+                      <div className="text-xs text-blue-400 break-all mb-2">{position.pairAddress}</div>
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="text-gray-400">{lt('lpTokenBalance')}:</span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-white font-medium">{position.lpBalance}</span>
+                          <button 
+                            className="text-xs bg-green-900/30 text-green-400 px-2 py-0.5 rounded hover:bg-green-900/50 transition"
+                            onClick={() => handleAddLPTokenToWallet(position)}
+                          >
+                            {lt('addToWallet')}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );

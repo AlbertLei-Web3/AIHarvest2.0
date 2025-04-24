@@ -1,9 +1,17 @@
 import { ethers } from 'ethers';
 
-// Define ethereum window type
+// Fixing the window interface to avoid duplication
 declare global {
   interface Window {
-    ethereum: any;
+    ethereum: {
+      isMetaMask?: boolean;
+      selectedAddress?: string;
+      chainId?: string;
+      isConnected?: () => boolean;
+      request: (args: {method: string; params?: any}) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+    };
   }
 }
 
@@ -18,7 +26,8 @@ const SimpleSwapRouterABI = [
   "function addLiquidity(address tokenA, address tokenB, uint256 amountADesired, uint256 amountBDesired, uint256 amountAMin, uint256 amountBMin, address to) returns (uint256 amountA, uint256 amountB, uint256 liquidity)",
   "function removeLiquidity(address tokenA, address tokenB, uint256 liquidity, uint256 amountAMin, uint256 amountBMin, address to) returns (uint256 amountA, uint256 amountB)",
   "function balanceOf(address pair, address account) view returns (uint256)",
-  "function totalSupply(address pair) view returns (uint256)"
+  "function totalSupply(address pair) view returns (uint256)",
+  "function getLPToken(address pair) view returns (address)"
 ];
 
 const IERC20ABI = [
@@ -33,17 +42,19 @@ const IERC20ABI = [
   "function transferFrom(address from, address to, uint256 amount) returns (bool)"
 ];
 
-// Testnet contract addresses 测试网合约地址
-export const ROUTER_ADDRESS = "0x6252F147Accf98c2527EFbd7446955b51A3f2Cf4"; // SimpleSwapRouter地址
+// Sepolia contract addresses 测试网合约地址
+export const ROUTER_ADDRESS = "0xDc61cE373D3d005d2C20467C87f5481D1471616e"; // SimpleSwapRouter地址
+export const FARM_ADDRESS = "0xf9D52f36e685b6184FBB09926c93696aF26bD720"; // SimpleFarm地址
 
-// 注意：部署后，请使用部署生成的AIHToken地址替换AIH的值
+// 代币地址，已更新为最新部署版本
 export const TOKENS = {
-  ETH: "0xEthTokenAddress",  // 可以保留为占位符或使用Sepolia的ETH代币地址
-  AIH: "0x23572E77d0Ba0893b4d83757eB23137729decd87",  // AIH代币地址
-  USDT: "0xUsdtTokenAddress", // 可以保留为占位符或使用Sepolia的USDT代币地址
-  DAI: "0xDaiTokenAddress",   // 可以保留为占位符或使用Sepolia的DAI代币地址
+  // 保留ETH作为原生代币
+  ETH: "0x0000000000000000000000000000000000000000",
   
-  // 添加用户的自定义代币
+  // 平台代币
+  AIH: "0xdc9bef9f72Fa0099A757a5f11f31B90DC7D89C8F",  // AIH代币地址 - 已更新
+  
+  // 用户自定义代币 - 保留不变
   TD: "0xCa7B8473802716b69fE753a5f9F6D5013a8D8B20",
   FHBI: "0x5c15514CA3B498510D0CEE0B505F1c603bB3324D",
   FHBI2: "0x3746A42C0281c874Cb3796E3d15fb035c8a585b9",
@@ -51,10 +62,44 @@ export const TOKENS = {
   RTK: "0xa447E2f8BBC54eB13134b02f69bE3401E10BD0A3"
 };
 
+// 添加检查ethereum状态的函数
+export const checkEthereumStatus = (): boolean => {
+  console.log('Checking ethereum status...');
+  
+  if (!window.ethereum) {
+    console.error('No ethereum object found in window');
+    return false;
+  }
+  
+  console.log('Ethereum object properties:', {
+    isMetaMask: window.ethereum.isMetaMask,
+    selectedAddress: window.ethereum.selectedAddress,
+    chainId: window.ethereum.chainId
+  });
+  
+  if (!window.ethereum.selectedAddress) {
+    console.warn('No selected address, connection may be lost');
+    return false;
+  }
+  
+  return true;
+};
+
 // Get signer from connected wallet 从连接的钱包获取签名者
 export const getSigner = () => {
   if (!window.ethereum) throw new Error("No crypto wallet found");
-  return new ethers.providers.Web3Provider(window.ethereum).getSigner();
+  
+  // 检查连接状态但不阻断流程
+  try {
+    const isConnected = checkEthereumStatus();
+    if (!isConnected) {
+      console.warn("Wallet connection issues detected, but proceeding with available provider");
+    }
+  } catch (error) {
+    console.error("Error checking wallet status:", error);
+  }
+  
+  return new ethers.providers.Web3Provider(window.ethereum as ethers.providers.ExternalProvider).getSigner();
 };
 
 // Get router contract instance 获取路由合约实例
@@ -69,12 +114,61 @@ export const getTokenContract = (tokenAddress: string, signerOrProvider?: ethers
   return new ethers.Contract(tokenAddress, IERC20ABI, provider);
 };
 
-// Get token balance 获取代币余额
+// Add wallet reconnection helper
+export const ensureWalletConnection = async (): Promise<string | null> => {
+  if (!window.ethereum) {
+    console.error('No ethereum object found');
+    return null;
+  }
+  
+  try {
+    // Try to get accounts first through non-intrusive method
+    let accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    
+    // If no accounts, request connection
+    if (!accounts || accounts.length === 0) {
+      console.log('No accounts found, requesting connection...');
+      accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    }
+    
+    if (accounts && accounts.length > 0) {
+      console.log('Connected wallet address:', accounts[0]);
+      return accounts[0];
+    } else {
+      console.error('Failed to get any accounts even after connection request');
+      return null;
+    }
+  } catch (error) {
+    console.error('Error ensuring wallet connection:', error);
+    return null;
+  }
+};
+
+// Enhance the getTokenBalance function to be more robust
 export const getTokenBalance = async (tokenAddress: string, accountAddress: string): Promise<string> => {
-  const tokenContract = getTokenContract(tokenAddress);
-  const balance = await tokenContract.balanceOf(accountAddress);
-  const decimals = await tokenContract.decimals();
-  return ethers.utils.formatUnits(balance, decimals);
+  if (!tokenAddress || !accountAddress) {
+    console.error('Invalid parameters for getTokenBalance:', { tokenAddress, accountAddress });
+    return "0";
+  }
+  
+  try {
+    // Ensure wallet is connected properly
+    await ensureWalletConnection();
+    
+    // Get token contract with fresh provider
+    const provider = new ethers.providers.Web3Provider(window.ethereum);
+    const tokenContract = new ethers.Contract(tokenAddress, IERC20ABI, provider);
+    
+    const balance = await tokenContract.balanceOf(accountAddress);
+    const decimals = await tokenContract.decimals();
+    const formattedBalance = ethers.utils.formatUnits(balance, decimals);
+    
+    console.log(`Retrieved balance for token ${tokenAddress}: ${formattedBalance}`);
+    return formattedBalance;
+  } catch (error) {
+    console.error(`Error getting token balance for ${tokenAddress}:`, error);
+    return "0";
+  }
 };
 
 // Get token allowance 获取代币授权
@@ -388,12 +482,105 @@ export const getLPTokenBalance = async (
       return "0";
     }
     
-    // Get LP token balance 获取LP代币余额
-    const balance = await router.balanceOf(pairAddress, accountAddress);
-    return ethers.utils.formatUnits(balance, 18); // LP tokens typically have 18 decimals
+    // Get LP token address 获取LP代币地址
+    const lpTokenAddress = await router.getLPToken(pairAddress);
+    if (lpTokenAddress === ethers.constants.AddressZero) {
+      return "0";
+    }
+    
+    // Get LP token contract 获取LP代币合约
+    const lpTokenContract = getTokenContract(lpTokenAddress);
+    const balance = await lpTokenContract.balanceOf(accountAddress);
+    return ethers.utils.formatUnits(balance, 18); // LP tokens have 18 decimals 获取LP代币余额，LP代币有18个小数
   } catch (error) {
     console.error("Error getting LP token balance:", error);
     return "0";
+  }
+};
+
+// Get LP token address 获取LP代币地址
+export const getLPTokenAddress = async (
+  tokenAAddress: string,
+  tokenBAddress: string
+): Promise<string> => {
+  try {
+    const router = getRouterContract();
+    
+    // Get pair address 获取代币对地址
+    const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+    
+    if (pairAddress === ethers.constants.AddressZero) {
+      return ethers.constants.AddressZero;
+    }
+    
+    // Get LP token address 获取LP代币地址
+    const lpTokenAddress = await router.getLPToken(pairAddress);
+    return lpTokenAddress;
+  } catch (error) {
+    console.error("Error getting LP token address:", error);
+    return ethers.constants.AddressZero;
+  }
+};
+
+// Add LP token to MetaMask 将LP代币添加到MetaMask
+export const addLPTokenToWallet = async (
+  tokenAAddress: string,
+  tokenBAddress: string
+): Promise<boolean> => {
+  try {
+    const router = getRouterContract();
+    
+    // Get pair address 获取代币对地址
+    const pairAddress = await router.getPairAddress(tokenAAddress, tokenBAddress);
+    
+    if (pairAddress === ethers.constants.AddressZero) {
+      throw new Error("Pair doesn't exist");
+    }
+    
+    // Get LP token address 获取LP代币地址
+    const lpTokenAddress = await router.getLPToken(pairAddress);
+    
+    if (lpTokenAddress === ethers.constants.AddressZero) {
+      throw new Error("LP token doesn't exist");
+    }
+    
+    // Get token contracts to get names and symbols 获取代币合约以获取名称和符号
+    const tokenAContract = getTokenContract(tokenAAddress);
+    const tokenBContract = getTokenContract(tokenBAddress);
+    const lpTokenContract = getTokenContract(lpTokenAddress);
+    
+    const tokenASymbol = await tokenAContract.symbol();
+    const tokenBSymbol = await tokenBContract.symbol();
+    const lpTokenSymbol = await lpTokenContract.symbol();
+    const lpTokenName = await lpTokenContract.name();
+    
+    // Add token to wallet 添加代币到钱包
+    if (window.ethereum) {
+      try {
+        // Add token to metamask 添加代币到MetaMask
+        await window.ethereum.request({
+          method: 'wallet_watchAsset',
+          params: {
+            type: 'ERC20',
+            options: {
+              address: lpTokenAddress,
+              symbol: lpTokenSymbol,
+              decimals: 18,
+              name: lpTokenName,
+            },
+          } as any
+        });
+        return true;
+      } catch (error) {
+        console.error("Error adding token to wallet:", error);
+        return false;
+      }
+    } else {
+      throw new Error("Ethereum wallet not found");
+    }
+  } catch (error) {
+    console.error("Error adding LP token to wallet:", error);
+    return false;
   }
 };
 
@@ -503,8 +690,19 @@ export const addLiquidity = async (
   console.log(`Desired amounts: ${amountADesired} (token A), ${amountBDesired} (token B), Slippage: ${slippageTolerance}%`);
   
   try {
+    // 确保获取签名者地址并验证
+    if (!window.ethereum || !window.ethereum.selectedAddress) {
+      throw new Error("Wallet not connected. Please connect your wallet first.");
+    }
+    
     const signer = getSigner();
     const signerAddress = await signer.getAddress();
+    
+    // 验证地址不为零地址
+    if (!signerAddress || signerAddress === ethers.constants.AddressZero) {
+      throw new Error("Invalid signer address: Address is empty or zero address");
+    }
+    
     console.log(`Using signer address: ${signerAddress}`);
     
     const router = getRouterContract(signer);
@@ -542,7 +740,7 @@ export const addLiquidity = async (
       
       if (sqrt < 1000) {
         console.error(`INSUFFICIENT_INITIAL_AMOUNTS: Square root ${sqrt} is less than minimum 1000`);
-        throw new Error("INSUFFICIENT_INITIAL_AMOUNTS");
+        throw new Error("INSUFFICIENT_INITIAL_AMOUNTS: Initial liquidity too low. Please add more tokens.");
       }
       console.log(`Initial liquidity check passed. Minimum requirement (1000) met with ${sqrt.toFixed(2)}`);
     } else {
@@ -594,21 +792,35 @@ export const addLiquidity = async (
     }
     
     console.log(`Allowance checks passed. Executing addLiquidity...`);
+    console.log(`LP tokens will be sent to: ${signerAddress}`);
     
-    // Add liquidity 添加流动性
-    const tx = await router.addLiquidity(
-      tokenAAddress,
-      tokenBAddress,
-      amountAWei,
-      amountBWei,
-      amountAMin,
-      amountBMin,
-      signerAddress
-    );
+    // 确保明确传递接收者地址，并且不是零地址
+    if (!signerAddress || signerAddress === ethers.constants.AddressZero) {
+      throw new Error("Cannot add liquidity: Recipient address is empty or zero address");
+    }
     
-    console.log(`Transaction submitted with hash: ${tx.hash}`);
-    console.log(`-------- ADD LIQUIDITY TRANSACTION END --------\n`);
-    return tx;
+    // 添加流动性，明确传递接收者地址
+    try {
+      const tx = await router.addLiquidity(
+        tokenAAddress,
+        tokenBAddress,
+        amountAWei,
+        amountBWei,
+        amountAMin,
+        amountBMin,
+        signerAddress // 确保接收者地址为当前签名者
+      );
+      
+      console.log(`Transaction submitted with hash: ${tx.hash}`);
+      console.log(`-------- ADD LIQUIDITY TRANSACTION END --------\n`);
+      return tx;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("mint to the zero address")) {
+        console.error("Error: Router trying to mint tokens to the zero address");
+        throw new Error("Error adding liquidity: The contract tried to mint LP tokens to the zero address. Please ensure your wallet is properly connected.");
+      }
+      throw error;
+    }
   } catch (error) {
     console.error("Error adding liquidity:", error);
     console.log(`-------- ADD LIQUIDITY TRANSACTION FAILED --------\n`);

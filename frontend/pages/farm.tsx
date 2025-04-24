@@ -129,39 +129,60 @@ interface FarmTranslationsType {
   [key: string]: FarmTranslation;
 }
 
-// Token data
+// Updated token data - removed USDT, DAI and kept custom tokens
 const tokens: TokensType = {
   eth: {
     name: 'Ethereum',
     symbol: 'ETH',
     logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    balance: 1.5,
+    balance: 0,
     decimals: 18
   },
   aih: {
     name: 'AIH Token',
     symbol: 'AIH',
     logo: 'https://cryptologos.cc/logos/aave-aave-logo.svg',
-    balance: 1000,
+    balance: 0,
     decimals: 18
   },
-  usdt: {
-    name: 'Tether USD',
-    symbol: 'USDT',
-    logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
-    balance: 500,
-    decimals: 6
+  td: {
+    name: 'TD Token',
+    symbol: 'TD',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: 0,
+    decimals: 18
   },
-  dai: {
-    name: 'Dai Stablecoin',
-    symbol: 'DAI',
-    logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-    balance: 500,
+  fhbi: {
+    name: 'FHBI Token',
+    symbol: 'FHBI',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: 0,
+    decimals: 18
+  },
+  fhbi2: {
+    name: 'FHBI2 Token',
+    symbol: 'FHBI2',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: 0,
+    decimals: 18
+  },
+  fhbi3: {
+    name: 'FHBI3 Token',
+    symbol: 'FHBI3',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: 0,
+    decimals: 18
+  },
+  rtk: {
+    name: 'RTK Token',
+    symbol: 'RTK',
+    logo: 'https://cryptologos.cc/logos/default-logo.svg',
+    balance: 0,
     decimals: 18
   }
 };
 
-// Default farm data - will be replaced with real data
+// Updated farm data with new token pairs
 const defaultFarms: FarmsType = {
   '0': {
     id: 0,
@@ -180,18 +201,33 @@ const defaultFarms: FarmsType = {
   },
   '1': {
     id: 1,
-    name: 'AIH-USDT LP',
-    description: 'Stake AIH-USDT LP tokens to earn AIH',
+    name: 'AIH-TD LP',
+    description: 'Stake AIH-TD LP tokens to earn AIH',
     apr: 62.3,
     totalStaked: '0',
     dailyRewards: 50, // 50 AIH per day
     lpToken: '',
     tokenA: 'aih',
-    tokenB: 'usdt',
+    tokenB: 'td',
     balance: '0',
     userStaked: '0',
     pendingRewards: '0',
     value: 50 // $50 per LP token
+  },
+  '2': {
+    id: 2,
+    name: 'AIH-FHBI LP',
+    description: 'Stake AIH-FHBI LP tokens to earn AIH',
+    apr: 52.3,
+    totalStaked: '0',
+    dailyRewards: 40, // 40 AIH per day
+    lpToken: '',
+    tokenA: 'aih',
+    tokenB: 'fhbi',
+    balance: '0',
+    userStaked: '0',
+    pendingRewards: '0',
+    value: 40 // $40 per LP token
   }
 };
 

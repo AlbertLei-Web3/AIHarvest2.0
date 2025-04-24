@@ -64,7 +64,7 @@ interface SwapTranslationsType {
   [key: string]: SwapTranslation;
 }
 
-// Token data 
+// Updated token data - removed USDT, DAI and kept custom tokens
 const tokensData: TokensType = {
   eth: {
     name: 'Ethereum',
@@ -81,22 +81,6 @@ const tokensData: TokensType = {
     balance: '0',
     decimals: 18,
     address: TOKENS.AIH
-  },
-  usdt: {
-    name: 'Tether USD',
-    symbol: 'USDT',
-    logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg',
-    balance: '0',
-    decimals: 6,
-    address: TOKENS.USDT
-  },
-  dai: {
-    name: 'Dai Stablecoin',
-    symbol: 'DAI',
-    logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg',
-    balance: '0',
-    decimals: 18,
-    address: TOKENS.DAI
   },
   td: {
     name: 'TD Token',

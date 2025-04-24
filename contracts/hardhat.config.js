@@ -35,11 +35,14 @@ module.exports = {
     },
     sepolia: {
       url: `https://sepolia.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [PRIVATE_KEY]
+      accounts: [PRIVATE_KEY],
+      chainId: 11155111,
+      timeout: 60000 
     },
     mainnet: {
       url: `https://mainnet.infura.io/v3/${INFURA_API_KEY}`,
-      accounts: [PRIVATE_KEY]
+      accounts: [PRIVATE_KEY],
+      chainId: 1
     }
   },
   etherscan: {
