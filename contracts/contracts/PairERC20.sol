@@ -11,9 +11,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
  * 代表代币对的流动性提供者代币的ERC20代币
  */
 contract PairERC20 is ERC20, ERC20Burnable, Ownable {
-    address public token0;
-    address public token1;
-    address public router;
+    // Token addresses locked to immutable for gas savings and security
+    address public immutable token0;
+    address public immutable token1;
+    address public immutable router;
+
+    // Events
+    event Minted(address indexed to, uint256 amount);
+    event BurnedFrom(address indexed from, uint256 amount);
 
     /**
      * @dev Constructor for PairERC20 token
@@ -30,11 +35,16 @@ contract PairERC20 is ERC20, ERC20Burnable, Ownable {
         string memory name_,
         string memory symbol_
     ) ERC20(name_, symbol_) {
+        require(_token0 != address(0), "token0 cannot be zero address");
+        require(_token1 != address(0), "token1 cannot be zero address");
+        require(_router != address(0), "router cannot be zero address");
+        require(_token0 != _token1, "tokens must be different");
+        
         token0 = _token0;
         token1 = _token1;
         router = _router;
         
-        // OpenZeppelin 4.9.3 uses transferOwnership instead of Ownable constructor
+        // Transfer ownership to router
         transferOwnership(_router);
     }
 
@@ -45,7 +55,11 @@ contract PairERC20 is ERC20, ERC20Burnable, Ownable {
      * @param amount Amount of tokens to mint
      */
     function mint(address to, uint256 amount) external onlyOwner {
+        require(to != address(0), "Cannot mint to zero address");
+        require(amount > 0, "Amount must be greater than zero");
+        
         _mint(to, amount);
+        emit Minted(to, amount);
     }
 
     /**
@@ -55,8 +69,12 @@ contract PairERC20 is ERC20, ERC20Burnable, Ownable {
      * @param amount Amount of tokens to burn
      */
     function burnFrom(address from, uint256 amount) public override onlyOwner {
+        require(amount > 0, "Amount must be greater than zero");
+        
+        // Optimized allowance check for better gas usage
         if (from != msg.sender) {
             uint256 currentAllowance = allowance(from, msg.sender);
+            // If not infinite approval
             if (currentAllowance != type(uint256).max) {
                 require(currentAllowance >= amount, "ERC20: burn amount exceeds allowance");
                 unchecked {
@@ -64,6 +82,16 @@ contract PairERC20 is ERC20, ERC20Burnable, Ownable {
                 }
             }
         }
+        
         _burn(from, amount);
+        emit BurnedFrom(from, amount);
+    }
+    
+    /**
+     * @dev Override decimals to match most common tokens
+     * 覆盖decimals以匹配最常见的代币
+     */
+    function decimals() public pure override returns (uint8) {
+        return 18;
     }
 } 

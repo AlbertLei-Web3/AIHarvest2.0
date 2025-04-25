@@ -13,7 +13,11 @@ import "./AIHToken.sol";
  */
 contract SimpleFarm is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+    using SafeERC20 for AIHToken;
 
+    // Constants for calculations
+    uint256 private constant PRECISION_FACTOR = 1e12;
+    
     // Info of each user
     struct UserInfo {
         uint256 amount;           // How many LP tokens the user has provided
@@ -37,7 +41,7 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     uint256 public aihPerSecond;
     
     // Total allocation points across all pools
-    uint256 public totalAllocPoint = 0;
+    uint256 public totalAllocPoint;
     
     // The timestamp when AIH mining starts
     uint256 public immutable startTime;
@@ -56,19 +60,17 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     event PoolAdded(uint256 indexed pid, address lpToken, uint256 allocPoint);
     event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
     event PoolRewardUpdated(uint256 indexed pid, uint256 lastRewardTime, uint256 lpSupply, uint256 accAIHPerShare);
+    event RewardRateUpdated(uint256 oldRate, uint256 newRate);
 
     /**
      * @dev Constructor
      * @param _aihToken The AIH token address
      */
-    constructor(address _aihToken) Ownable() {
+    constructor(address _aihToken) {
         require(_aihToken != address(0), "AIH token cannot be zero address");
         aihToken = AIHToken(_aihToken);
         startTime = block.timestamp;
         aihPerSecond = 100000000000000000; // 0.1 AIH per second (about 8640 AIH per day)
-        
-        // Transfer ownership
-        transferOwnership(msg.sender);
     }
 
     /**
@@ -85,11 +87,21 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _withUpdate Flag to call massUpdatePools
      */
     function add(uint256 _allocPoint, address _lpToken, bool _withUpdate) external onlyOwner {
+        require(_lpToken != address(0), "LP token cannot be zero address");
+        
+        // Check for duplicate LP token
+        uint256 length = poolInfo.length;
+        for (uint256 pid = 0; pid < length; ++pid) {
+            require(address(poolInfo[pid].lpToken) != _lpToken, "LP token already added");
+        }
+        
         if (_withUpdate) {
             massUpdatePools();
         }
         
         uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
+        
+        // Update total allocation points - unchecked is safe with Solidity 0.8+ overflow protection
         totalAllocPoint += _allocPoint;
         
         poolInfo.push(PoolInfo({
@@ -110,11 +122,16 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _withUpdate Flag to call massUpdatePools
      */
     function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) external onlyOwner {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
         if (_withUpdate) {
             massUpdatePools();
         }
         
-        totalAllocPoint = totalAllocPoint - poolInfo[_pid].allocPoint + _allocPoint;
+        uint256 oldAllocPoint = poolInfo[_pid].allocPoint;
+        
+        // Update allocation points - unchecked is safe with Solidity 0.8+ overflow protection
+        totalAllocPoint = totalAllocPoint - oldAllocPoint + _allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
         
         emit PoolUpdated(_pid, _allocPoint);
@@ -126,30 +143,34 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      */
     function setAIHPerSecond(uint256 _aihPerSecond) external onlyOwner {
         massUpdatePools();
+        uint256 oldRate = aihPerSecond;
         aihPerSecond = _aihPerSecond;
+        emit RewardRateUpdated(oldRate, _aihPerSecond);
     }
 
     /**
      * @dev Calculate AIH rewards for a pool from the last reward time to now
      * @param _pid Pool ID
+     * @param _user User address
      * @return pending AIH rewards
      */
     function pendingAIH(uint256 _pid, address _user) external view returns (uint256) {
-        PoolInfo storage pool = poolInfo[_pid];
-        UserInfo storage user = userInfo[_pid][_user];
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
+        PoolInfo memory pool = poolInfo[_pid];
+        UserInfo memory user = userInfo[_pid][_user];
         
         uint256 accAIHPerShare = pool.accAIHPerShare;
         uint256 lpSupply = pool.totalStaked;
         
-        if (block.timestamp > pool.lastRewardTime && lpSupply != 0) {
+        if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && totalAllocPoint > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
             uint256 aihReward = (timeElapsed * aihPerSecond * pool.allocPoint) / totalAllocPoint;
-            accAIHPerShare += (aihReward * 1e12) / lpSupply;
+            accAIHPerShare += (aihReward * PRECISION_FACTOR) / lpSupply;
         }
         
-        // Calculate rewards
-        uint256 pending = (user.amount * accAIHPerShare) / 1e12 - user.rewardDebt + user.pendingRewards;
-        return pending;
+        // Calculate rewards - unchecked is safe with Solidity 0.8+ overflow protection
+        return (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt + user.pendingRewards;
     }
 
     /**
@@ -167,6 +188,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _pid Pool ID
      */
     function updatePool(uint256 _pid) public {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
         PoolInfo storage pool = poolInfo[_pid];
         
         if (block.timestamp <= pool.lastRewardTime) {
@@ -174,7 +197,7 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         }
         
         uint256 lpSupply = pool.totalStaked;
-        if (lpSupply == 0) {
+        if (lpSupply == 0 || totalAllocPoint == 0) {
             pool.lastRewardTime = block.timestamp;
             return;
         }
@@ -185,7 +208,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         // Mint AIH rewards
         aihToken.mint(address(this), aihReward);
         
-        pool.accAIHPerShare += (aihReward * 1e12) / lpSupply;
+        // Update accumulator - unchecked is safe with Solidity 0.8+ overflow protection
+        pool.accAIHPerShare += (aihReward * PRECISION_FACTOR) / lpSupply;
         pool.lastRewardTime = block.timestamp;
         
         emit PoolRewardUpdated(_pid, pool.lastRewardTime, lpSupply, pool.accAIHPerShare);
@@ -197,27 +221,42 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _amount Amount of LP tokens to deposit
      */
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        require(_amount >= 0, "Amount must be >= 0");
+        
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
         updatePool(_pid);
         
+        // Cache accAIHPerShare for gas savings
+        uint256 accAIHPerShare = pool.accAIHPerShare;
+        
         // Harvest any pending rewards
         if (user.amount > 0) {
-            uint256 pending = (user.amount * pool.accAIHPerShare) / 1e12 - user.rewardDebt;
+            uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt;
             if (pending > 0) {
                 user.pendingRewards += pending;
             }
         }
         
         if (_amount > 0) {
+            // Check user's balance before transfer
+            uint256 beforeBalance = pool.lpToken.balanceOf(address(this));
+            
             // Transfer LP tokens to contract
             pool.lpToken.safeTransferFrom(msg.sender, address(this), _amount);
+            
+            // Confirm tokens received for security
+            uint256 afterBalance = pool.lpToken.balanceOf(address(this));
+            require(afterBalance >= beforeBalance + _amount, "Transfer did not receive expected amount");
+            
+            // Update storage - unchecked is safe with Solidity 0.8+ overflow protection
             user.amount += _amount;
             pool.totalStaked += _amount;
         }
         
-        user.rewardDebt = (user.amount * pool.accAIHPerShare) / 1e12;
+        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
         
         emit Deposit(msg.sender, _pid, _amount);
     }
@@ -228,6 +267,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _amount Amount of LP tokens to withdraw
      */
     function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
@@ -235,8 +276,11 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         
         updatePool(_pid);
         
+        // Cache accAIHPerShare for gas savings
+        uint256 accAIHPerShare = pool.accAIHPerShare;
+        
         // Harvest pending rewards
-        uint256 pending = (user.amount * pool.accAIHPerShare) / 1e12 - user.rewardDebt + user.pendingRewards;
+        uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt + user.pendingRewards;
         if (pending > 0) {
             user.pendingRewards = 0;
             safeAIHTransfer(msg.sender, pending);
@@ -244,12 +288,15 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         }
         
         if (_amount > 0) {
+            // Update storage - unchecked is safe with Solidity 0.8+ overflow protection
             user.amount -= _amount;
             pool.totalStaked -= _amount;
+            
+            // Transfer LP tokens back to user
             pool.lpToken.safeTransfer(msg.sender, _amount);
         }
         
-        user.rewardDebt = (user.amount * pool.accAIHPerShare) / 1e12;
+        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
         
         emit Withdraw(msg.sender, _pid, _amount);
     }
@@ -259,19 +306,27 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _pid Pool ID
      */
     function harvest(uint256 _pid) external nonReentrant {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
+        // Skip empty harvest operations
+        require(user.amount > 0, "Nothing to harvest");
+        
         updatePool(_pid);
         
-        uint256 pending = (user.amount * pool.accAIHPerShare) / 1e12 - user.rewardDebt + user.pendingRewards;
+        // Cache accAIHPerShare for gas savings
+        uint256 accAIHPerShare = pool.accAIHPerShare;
+        
+        uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt + user.pendingRewards;
         if (pending > 0) {
             user.pendingRewards = 0;
             safeAIHTransfer(msg.sender, pending);
             emit RewardPaid(msg.sender, pending);
         }
         
-        user.rewardDebt = (user.amount * pool.accAIHPerShare) / 1e12;
+        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
     }
 
     /**
@@ -279,15 +334,24 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _pid Pool ID
      */
     function emergencyWithdraw(uint256 _pid) external nonReentrant {
+        require(_pid < poolInfo.length, "Pool does not exist");
+        
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
+        // Cache amount for gas savings
         uint256 amount = user.amount;
+        
+        // Skip empty withdrawals
+        require(amount > 0, "Nothing to withdraw");
+        
+        // Reset user data first (to prevent reentrancy)
         pool.totalStaked -= amount;
         user.amount = 0;
         user.rewardDebt = 0;
         user.pendingRewards = 0;
         
+        // Transfer LP tokens back to user
         pool.lpToken.safeTransfer(msg.sender, amount);
         
         emit EmergencyWithdraw(msg.sender, _pid, amount);
@@ -310,6 +374,7 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
             uint256 pendingRewards
         ) 
     {
+        require(_pid < poolInfo.length, "Pool does not exist");
         UserInfo storage user = userInfo[_pid][_user];
         return (user.amount, user.rewardDebt, user.pendingRewards);
     }
@@ -330,6 +395,7 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         uint256 accAIHPerShare,
         uint256 totalStaked
     ) {
+        require(_pid < poolInfo.length, "Pool does not exist");
         PoolInfo storage pool = poolInfo[_pid];
         return (
             pool.lpToken,
@@ -347,11 +413,14 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _amount Amount to transfer
      */
     function safeAIHTransfer(address _to, uint256 _amount) internal {
+        require(_to != address(0), "Cannot transfer to zero address");
+        
         uint256 aihBal = aihToken.balanceOf(address(this));
-        if (_amount > aihBal) {
-            aihToken.transfer(_to, aihBal);
-        } else {
-            aihToken.transfer(_to, _amount);
+        uint256 amountToTransfer = _amount > aihBal ? aihBal : _amount;
+        
+        // Skip zero transfers
+        if (amountToTransfer > 0) {
+            aihToken.safeTransfer(_to, amountToTransfer);
         }
     }
 } 

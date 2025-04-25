@@ -37,12 +37,16 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
     // SimpleFarm contract address 简单农场合约地址
     address public farmAddress;
 
+    // Events for vesting releases
+    event TeamTokensReleased(uint256 amount);
+    event EcosystemTokensReleased(uint256 amount);
+    event FarmAddressSet(address farmAddress);
+
     /**
      * @dev Constructor that gives msg.sender all of existing tokens. 构造函数，将所有现有代币授予msg.sender
      */
     constructor(address _teamWallet, address _ecosystemWallet) 
         ERC20("AIHarvest Token", "AIH") 
-        Ownable()
     {
         require(_teamWallet != address(0), "Team wallet cannot be zero address");
         require(_ecosystemWallet != address(0), "Ecosystem wallet cannot be zero address");
@@ -53,9 +57,6 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         
         // Mint initial community tokens to the owner for distribution 将初始社区代币铸造给所有者进行分发
         _mint(msg.sender, COMMUNITY_ALLOCATION);
-        
-        // Transfer ownership 转移所有权
-        transferOwnership(msg.sender);
     }
     
     /**
@@ -66,12 +67,14 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         require(_farmAddress != address(0), "Farm address cannot be zero address");
         require(farmAddress == address(0), "Farm address already set");
         farmAddress = _farmAddress;
+        emit FarmAddressSet(_farmAddress);
     }
     
     /**
      * @dev Release vested tokens for the team 释放团队代币
+     * @return amount The amount of tokens released 释放的代币数量
      */
-    function releaseTeamTokens() external {
+    function releaseTeamTokens() external returns (uint256 amount) {
         require(block.timestamp > vestingStart, "Vesting not started");
         
         uint256 vestedAmount = calculateVestedAmount(TEAM_ALLOCATION, teamTokensReleased);
@@ -79,12 +82,16 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         
         teamTokensReleased += vestedAmount;
         _mint(teamWallet, vestedAmount);
+        
+        emit TeamTokensReleased(vestedAmount);
+        return vestedAmount;
     }
     
     /**
      * @dev Release vested tokens for the ecosystem fund 释放生态系统基金代币
+     * @return amount The amount of tokens released 释放的代币数量
      */
-    function releaseEcosystemTokens() external {
+    function releaseEcosystemTokens() external returns (uint256 amount) {
         require(block.timestamp > vestingStart, "Vesting not started");
         
         uint256 vestedAmount = calculateVestedAmount(ECOSYSTEM_ALLOCATION, ecosystemTokensReleased);
@@ -92,6 +99,9 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         
         ecosystemTokensReleased += vestedAmount;
         _mint(ecosystemWallet, vestedAmount);
+        
+        emit EcosystemTokensReleased(vestedAmount);
+        return vestedAmount;
     }
     
     /**
@@ -105,8 +115,24 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
         } else {
             uint256 timeElapsed = block.timestamp - vestingStart;
             uint256 totalVested = (totalAllocation * timeElapsed) / VESTING_DURATION;
-            return totalVested - alreadyReleased;
+            return totalVested > alreadyReleased ? totalVested - alreadyReleased : 0;
         }
+    }
+    
+    /**
+     * @dev Get the available vested amount for team 获取团队可用的已解锁金额
+     * @return The available vested amount 可用的已解锁金额
+     */
+    function getAvailableTeamVestedAmount() external view returns (uint256) {
+        return calculateVestedAmount(TEAM_ALLOCATION, teamTokensReleased);
+    }
+    
+    /**
+     * @dev Get the available vested amount for ecosystem 获取生态可用的已解锁金额
+     * @return The available vested amount 可用的已解锁金额
+     */
+    function getAvailableEcosystemVestedAmount() external view returns (uint256) {
+        return calculateVestedAmount(ECOSYSTEM_ALLOCATION, ecosystemTokensReleased);
     }
     
     /**
@@ -116,19 +142,20 @@ contract AIHToken is ERC20, ERC20Burnable, Ownable {
      */
     function mint(address to, uint256 amount) external {
         require(msg.sender == farmAddress, "Only the farm can mint tokens");
-        require(totalSupply() + amount <= MAX_SUPPLY, "Exceeds max supply");
+        require(to != address(0), "Cannot mint to zero address");
+        
+        uint256 newTotalSupply = totalSupply() + amount;
+        require(newTotalSupply <= MAX_SUPPLY, "Exceeds max supply");
+        
         _mint(to, amount);
     }
     
     /**
      * @dev Hook that is called before any transfer of tokens. 在任何代币转移之前调用的钩子
+     * This implementation was removed to save gas since the check is now done directly in the mint function.
+     * 移除此实现以节省gas，因为检查现在直接在mint函数中完成。
      */
     function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual override {
         super._beforeTokenTransfer(from, to, amount);
-        
-        // Ensure max supply is not exceeded on mint 确保在铸造时不会超过最大供应量
-        if (from == address(0)) {
-            require(totalSupply() <= MAX_SUPPLY, "Exceeds max supply");
-        }
     }
 } 

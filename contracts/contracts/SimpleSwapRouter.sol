@@ -5,13 +5,14 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./PairERC20.sol";
 
 /**
  * @title SimpleSwapRouter 
  * @dev A simple DEX router for swapping tokens and managing liquidity pools 一个简单的DEX路由器，用于交换代币和管理流动性池
  */
-contract SimpleSwapRouter is Ownable {
+contract SimpleSwapRouter is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
     // Events 事件
@@ -19,9 +20,16 @@ contract SimpleSwapRouter is Ownable {
     event Swap(address indexed pair, uint256 amountIn, uint256 amountOut, uint256 reserve0, uint256 reserve1, address to);
     event Mint(address indexed pair, uint256 amount0, uint256 amount1);
     event Burn(address indexed pair, uint256 amount0, uint256 amount1, address to);
+    event FeeCollectorUpdated(address oldCollector, address newCollector);
+    event FarmAuthorizationChanged(address indexed farm, bool authorized);
+    event SwapFeeUpdated(uint256 oldFee, uint256 newFee);
+    event ProtocolFeeCutUpdated(uint256 oldCut, uint256 newCut);
 
-    // Fee parameters 费用参数
+    // Constants for fee calculations
     uint256 public constant FEE_DENOMINATOR = 1000;
+    uint256 private constant MINIMUM_LIQUIDITY = 1000;
+    
+    // Fee parameters 费用参数
     uint256 public swapFee = 3; // 0.3% fee by default 默认0.3%费用
     uint256 public protocolFeeCut = 167; // 1/6 of fees (0.05%) goes to protocol 1/6的费用（0.05%）归协议
 
@@ -30,6 +38,9 @@ contract SimpleSwapRouter is Ownable {
 
     // AIH token address  AIH代币地址       
     address public immutable aihToken;
+    
+    // Authorized farm contracts that can call farmRemoveLiquidity
+    mapping(address => bool) public authorizedFarms;
 
     // Factory storage variables 工厂存储变量
     mapping(address => mapping(address => address)) public getPair;
@@ -66,7 +77,11 @@ contract SimpleSwapRouter is Ownable {
      */
     function setFeeCollector(address _feeCollector) external onlyOwner {
         require(_feeCollector != address(0), "Fee collector cannot be zero address");
+        
+        address oldCollector = feeCollector;
         feeCollector = _feeCollector;
+        
+        emit FeeCollectorUpdated(oldCollector, _feeCollector);
     }
 
     /**
@@ -75,7 +90,11 @@ contract SimpleSwapRouter is Ownable {
      */
     function setSwapFee(uint256 _swapFee) external onlyOwner {
         require(_swapFee <= 10, "Fee too high");
+        
+        uint256 oldFee = swapFee;
         swapFee = _swapFee;
+        
+        emit SwapFeeUpdated(oldFee, _swapFee);
     }
 
     /**
@@ -84,7 +103,24 @@ contract SimpleSwapRouter is Ownable {
      */
     function setProtocolFeeCut(uint256 _protocolFeeCut) external onlyOwner {
         require(_protocolFeeCut <= 1000, "Cut too high");
+        
+        uint256 oldCut = protocolFeeCut;
         protocolFeeCut = _protocolFeeCut;
+        
+        emit ProtocolFeeCutUpdated(oldCut, _protocolFeeCut);
+    }
+    
+    /**
+     * @dev Add or remove a farm contract authorization
+     * @param _farmAddress Farm contract address
+     * @param _authorized Whether the farm is authorized
+     */
+    function setFarmAuthorization(address _farmAddress, bool _authorized) external onlyOwner {
+        require(_farmAddress != address(0), "Farm address cannot be zero");
+        
+        authorizedFarms[_farmAddress] = _authorized;
+        
+        emit FarmAuthorizationChanged(_farmAddress, _authorized);
     }
 
     /**
@@ -93,7 +129,7 @@ contract SimpleSwapRouter is Ownable {
      * @param tokenB The second token address 第二个代币地址
      * @return pair The address of the pair (computed deterministically) 返回对地址（确定性计算）
      */
-    function createPair(address tokenA, address tokenB) public returns (address pair) {
+    function createPair(address tokenA, address tokenB) public nonReentrant returns (address pair) {
         require(tokenA != tokenB, "IDENTICAL_ADDRESSES");
         require(tokenA != address(0) && tokenB != address(0), "ZERO_ADDRESS");
         require(getPair[tokenA][tokenB] == address(0), "PAIR_EXISTS");
@@ -102,16 +138,30 @@ contract SimpleSwapRouter is Ownable {
         (address token0, address token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
 
         // Create pair address deterministically 确定性地创建对地址
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1));
         pair = address(uint160(uint256(keccak256(abi.encodePacked(
             hex"ff",
             address(this),
-            keccak256(abi.encodePacked(token0, token1)),
+            salt,
             hex"96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f" // init code hash 初始化代码哈希
         )))));
 
+        // Get token symbols 获取代币符号
+        string memory symbol0;
+        string memory symbol1;
+        try IERC20Metadata(token0).symbol() returns (string memory s) {
+            symbol0 = s;
+        } catch {
+            symbol0 = "TKN";
+        }
+        
+        try IERC20Metadata(token1).symbol() returns (string memory s) {
+            symbol1 = s;
+        } catch {
+            symbol1 = "TKN";
+        }
+        
         // Create token names 创建代币名称
-        string memory symbol0 = IERC20Metadata(token0).symbol();
-        string memory symbol1 = IERC20Metadata(token1).symbol();
         string memory pairName = string(abi.encodePacked(symbol0, "-", symbol1, " LP Token"));
         string memory pairSymbol = string(abi.encodePacked(symbol0, "-", symbol1, "-LP"));
         
@@ -119,10 +169,14 @@ contract SimpleSwapRouter is Ownable {
         PairERC20 lpToken = new PairERC20(token0, token1, address(this), pairName, pairSymbol);
         
         // Initialize pair data 初始化代币对数据
-        Pair storage pairData = pairs[pair];
-        pairData.token0 = token0;
-        pairData.token1 = token1;
-        pairData.lpToken = address(lpToken);
+        pairs[pair] = Pair({
+            token0: token0,
+            token1: token1,
+            reserve0: 0,
+            reserve1: 0,
+            kLast: 0,
+            lpToken: address(lpToken)
+        });
 
         // Register the pair 注册对
         getPair[token0][token1] = pair;
@@ -180,13 +234,15 @@ contract SimpleSwapRouter is Ownable {
         uint256 amountAMin,
         uint256 amountBMin,
         address to
-    ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+    ) external nonReentrant returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+        require(to != address(0), "Cannot add liquidity to zero address");
+        
         address pair = getPair[tokenA][tokenB];
         if (pair == address(0)) {
             pair = createPair(tokenA, tokenB);
         }
 
-        // Use getReserves directly without creating unused pairData variable
+        // Get reserves 获取当前储备量
         (uint256 reserveA, uint256 reserveB) = getReserves(pair, tokenA, tokenB);
         
         if (reserveA == 0 && reserveB == 0) {
@@ -196,7 +252,8 @@ contract SimpleSwapRouter is Ownable {
             
             // Ensure minimum amounts for first liquidity provision
             // The product must be high enough to allow for minimum liquidity of 1000
-            require(sqrt(amountA * amountB) >= 1000, "INSUFFICIENT_INITIAL_AMOUNTS");
+            require(amountA > 0 && amountB > 0, "INSUFFICIENT_INPUT_AMOUNTS");
+            require(sqrt(amountA * amountB) >= MINIMUM_LIQUIDITY, "INSUFFICIENT_INITIAL_AMOUNTS");
         } else {
             // Calculate optimal amounts 计算最优数量
             uint256 amountBOptimal = quote(amountADesired, reserveA, reserveB);
@@ -214,8 +271,8 @@ contract SimpleSwapRouter is Ownable {
         }
 
         // Transfer tokens to the contract 转移代币到合约
-        IERC20(tokenA).safeTransferFrom(msg.sender, address(this), amountA);
-        IERC20(tokenB).safeTransferFrom(msg.sender, address(this), amountB);
+        if (amountA > 0) IERC20(tokenA).safeTransferFrom(msg.sender, address(this), amountA);
+        if (amountB > 0) IERC20(tokenB).safeTransferFrom(msg.sender, address(this), amountB);
 
         // Update reserves 更新储备量
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, true);
@@ -245,46 +302,39 @@ contract SimpleSwapRouter is Ownable {
         uint256 amountAMin,
         uint256 amountBMin,
         address to
-    ) external returns (uint256 amountA, uint256 amountB) {
+    ) external nonReentrant returns (uint256 amountA, uint256 amountB) {
+        require(to != address(0), "Cannot remove liquidity to zero address");
+        require(liquidity > 0, "INSUFFICIENT_LIQUIDITY");
+        
         address pair = getPair[tokenA][tokenB];
         require(pair != address(0), "PAIR_DOES_NOT_EXIST");
         
         Pair storage pairData = pairs[pair];
         address lpToken = pairData.lpToken;
 
-        // Check if caller has sufficient LP tokens or allowance
-        if (msg.sender == to) {
-            // Direct user call - user must have the LP tokens
-            require(IERC20(lpToken).balanceOf(msg.sender) >= liquidity, "INSUFFICIENT_LIQUIDITY");
-        } else {
-            // Farm contract call - either Farm holds tokens or user approved Farm which approved router
-            require(
-                IERC20(lpToken).balanceOf(msg.sender) >= liquidity || 
-                IERC20(lpToken).allowance(to, msg.sender) >= liquidity,
-                "INSUFFICIENT_LIQUIDITY_OR_ALLOWANCE"
-            );
-        }
+        // Check if caller has sufficient LP tokens
+        require(IERC20(lpToken).balanceOf(msg.sender) >= liquidity, "INSUFFICIENT_LIQUIDITY");
 
-        // Get current reserves 获取当前储备量
+        // Get current reserves
         (uint256 reserveA, uint256 reserveB) = getReserves(pair, tokenA, tokenB);
         uint256 lpTotalSupply = IERC20(lpToken).totalSupply();
         
-        // Calculate token amounts to return 计算返回的代币数量
+        // Calculate token amounts to return
         amountA = (liquidity * reserveA) / lpTotalSupply;
         amountB = (liquidity * reserveB) / lpTotalSupply;
         
         require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
         require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
 
-        // Burn LP tokens 销毁LP代币
+        // Burn LP tokens
         _burnLPTokens(pair, msg.sender, liquidity);
         
-        // Update reserves 更新储备量
+        // Update reserves
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, false);
         
-        // Transfer tokens to recipient 转移代币到接收者
-        IERC20(tokenA).safeTransfer(to, amountA);
-        IERC20(tokenB).safeTransfer(to, amountB);
+        // Transfer tokens to recipient
+        if (amountA > 0) IERC20(tokenA).safeTransfer(to, amountA);
+        if (amountB > 0) IERC20(tokenB).safeTransfer(to, amountB);
         
         emit Burn(pair, amountA, amountB, to);
         return (amountA, amountB);
@@ -292,16 +342,15 @@ contract SimpleSwapRouter is Ownable {
 
     /**
      * @dev Specialized function for Farm contracts to remove liquidity on behalf of a user
-     * 专门为Farm合约设计的代表用户移除流动性的函数
-     * @param tokenA The first token address 第一个代币地址
-     * @param tokenB The second token address 第二个代币地址
-     * @param liquidity The amount of LP tokens to burn 要销毁的LP代币数量
-     * @param amountAMin The minimum amount of first token 第一个代币的最小数量
-     * @param amountBMin The minimum amount of second token 第二个代币的最小数量
-     * @param from Address that provided the liquidity/owns the LP tokens 提供流动性/拥有LP代币的地址
-     * @param to The recipient of the tokens 接收代币的地址
-     * @return amountA The amount of tokenA received 接收的第一个代币数量
-     * @return amountB The amount of tokenB received 接收的第二个代币数量
+     * @param tokenA The first token address
+     * @param tokenB The second token address
+     * @param liquidity The amount of LP tokens to burn
+     * @param amountAMin The minimum amount of first token
+     * @param amountBMin The minimum amount of second token
+     * @param from Address that provided the liquidity/owns the LP tokens
+     * @param to The recipient of the tokens
+     * @return amountA The amount of tokenA received
+     * @return amountB The amount of tokenB received
      */
     function farmRemoveLiquidity(
         address tokenA,
@@ -311,7 +360,13 @@ contract SimpleSwapRouter is Ownable {
         uint256 amountBMin,
         address from,
         address to
-    ) external returns (uint256 amountA, uint256 amountB) {
+    ) external nonReentrant returns (uint256 amountA, uint256 amountB) {
+        // Check that caller is an authorized farm
+        require(authorizedFarms[msg.sender], "CALLER_NOT_AUTHORIZED_FARM");
+        require(to != address(0), "Cannot remove liquidity to zero address");
+        require(from != address(0), "Invalid from address");
+        require(liquidity > 0, "INSUFFICIENT_LIQUIDITY");
+        
         address pair = getPair[tokenA][tokenB];
         require(pair != address(0), "PAIR_DOES_NOT_EXIST");
         
@@ -319,25 +374,24 @@ contract SimpleSwapRouter is Ownable {
         address lpToken = pairData.lpToken;
         
         // Farm contracts should hold LP tokens of users or have allowance
-        require(
-            IERC20(lpToken).balanceOf(msg.sender) >= liquidity || 
-            IERC20(lpToken).allowance(from, msg.sender) >= liquidity,
-            "FARM_INSUFFICIENT_LIQUIDITY_OR_ALLOWANCE"
-        );
+        bool farmHoldsTokens = IERC20(lpToken).balanceOf(msg.sender) >= liquidity;
+        bool farmHasAllowance = IERC20(lpToken).allowance(from, msg.sender) >= liquidity;
+        
+        require(farmHoldsTokens || farmHasAllowance, "FARM_INSUFFICIENT_LIQUIDITY_OR_ALLOWANCE");
 
-        // Get current reserves 获取当前储备量
+        // Get current reserves
         (uint256 reserveA, uint256 reserveB) = getReserves(pair, tokenA, tokenB);
         uint256 lpTotalSupply = IERC20(lpToken).totalSupply();
         
-        // Calculate token amounts to return 计算返回的代币数量
+        // Calculate token amounts to return
         amountA = (liquidity * reserveA) / lpTotalSupply;
         amountB = (liquidity * reserveB) / lpTotalSupply;
         
         require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
         require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
 
-        // Burn LP tokens 销毁LP代币
-        if (IERC20(lpToken).balanceOf(msg.sender) >= liquidity) {
+        // Burn LP tokens - use the cached boolean to avoid duplicate external calls
+        if (farmHoldsTokens) {
             // Farm contract holds the LP tokens
             _burnLPTokens(pair, msg.sender, liquidity);
         } else {
@@ -345,55 +399,70 @@ contract SimpleSwapRouter is Ownable {
             _burnLPTokens(pair, from, liquidity);
         }
         
-        // Update reserves 更新储备量
+        // Update reserves
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, false);
         
-        // Transfer tokens to recipient 转移代币到接收者
-        IERC20(tokenA).safeTransfer(to, amountA);
-        IERC20(tokenB).safeTransfer(to, amountB);
+        // Transfer tokens to recipient
+        if (amountA > 0) IERC20(tokenA).safeTransfer(to, amountA);
+        if (amountB > 0) IERC20(tokenB).safeTransfer(to, amountB);
         
         emit Burn(pair, amountA, amountB, to);
         return (amountA, amountB);
     }
 
     /**
-     * @dev Swap tokens 交换代币
-     * @param amountIn The amount of input tokens 输入代币的数量
-     * @param amountOutMin The minimum amount of output tokens 最小输出代币数量
-     * @param path The token path (e.g., [tokenA, tokenB]) 代币路径（例如：[tokenA, tokenB]）
-     * @param to The recipient of the output tokens 输出代币的接收者
-     * @return amounts The amounts of tokens swapped 交换的代币数量
+     * @dev Swap tokens
+     * @param amountIn The amount of input tokens
+     * @param amountOutMin The minimum amount of output tokens
+     * @param path The token path (e.g., [tokenA, tokenB])
+     * @param to The recipient of the output tokens
+     * @return amounts The amounts of tokens swapped
      */
     function swapExactTokensForTokens(
         uint256 amountIn,
         uint256 amountOutMin,
         address[] calldata path,
         address to
-    ) external returns (uint256[] memory amounts) {
+    ) external nonReentrant returns (uint256[] memory amounts) {
         require(path.length >= 2, "INVALID_PATH");
+        require(to != address(0), "Cannot swap to zero address");
+        require(amountIn > 0, "INSUFFICIENT_INPUT_AMOUNT");
         
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
         
-        // Transfer initial tokens to the contract 转移初始代币到合约
+        // Transfer initial tokens to the contract
         IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountIn);
+        
+        // Cache variables outside loop to save gas
+        uint256 amountOut;
+        address inputToken;
+        address outputToken;
+        address currentPair;
         
         // Perform swaps along the path
         for (uint i = 0; i < path.length - 1; i++) {
-            address currentPair = getPair[path[i]][path[i+1]];
+            inputToken = path[i];
+            outputToken = path[i+1];
+            currentPair = getPair[inputToken][outputToken];
+            
+            require(currentPair != address(0), "PAIR_DOES_NOT_EXIST");
+            
             (uint256 reserveIn, uint256 reserveOut) = getReserves(
                 currentPair, 
-                path[i], 
-                path[i+1]
+                inputToken, 
+                outputToken
             );
             
-            amounts[i+1] = _getAmountOut(amounts[i], reserveIn, reserveOut);
+            // Calculate output amount
+            amountOut = getAmountOut(amounts[i], reserveIn, reserveOut);
+            amounts[i+1] = amountOut;
             
-            // Update reserves and collect fees 更新储备量并收集费用
+            // Update reserves and collect fees
             _swap(
                 currentPair,
-                path[i],
-                path[i+1],
+                inputToken,
+                outputToken,
                 amounts[i],
                 i == path.length - 2 ? to : address(this)
             );
@@ -404,14 +473,16 @@ contract SimpleSwapRouter is Ownable {
     }
 
     /**
-     * @dev Get the reserves of a pair 获取对的储备量
-     * @param pair The pair address 对地址
-     * @param tokenA The first token address 第一个代币地址
-     * @param tokenB Second token (used to determine order) 第二个代币（用于确定顺序）
-     * @return reserveA The reserve of tokenA 第一个代币的储备量
-     * @return reserveB The reserve of tokenB 第二个代币的储备量
+     * @dev Get the reserves of a pair
+     * @param pair The pair address
+     * @param tokenA The first token address
+     * @param tokenB Second token (used to determine order)
+     * @return reserveA The reserve of tokenA
+     * @return reserveB The reserve of tokenB
      */
     function getReserves(address pair, address tokenA, address tokenB) public view returns (uint256 reserveA, uint256 reserveB) {
+        require(pair != address(0), "PAIR_DOES_NOT_EXIST");
+        
         Pair storage pairData = pairs[pair];
         address token0 = pairData.token0;
         (uint256 reserve0, uint256 reserve1) = (pairData.reserve0, pairData.reserve1);
@@ -466,7 +537,7 @@ contract SimpleSwapRouter is Ownable {
     }
 
     /**
-     * @dev Internal function to handle token swaps 内部函数处理代币交换
+     * @dev Internal function to handle token swaps
      */
     function _swap(
         address pair,
@@ -483,17 +554,20 @@ contract SimpleSwapRouter is Ownable {
         bool isToken0 = tokenIn == token0;
         (uint256 reserveIn, uint256 reserveOut) = isToken0 ? (reserve0, reserve1) : (reserve1, reserve0);
         
-        // Calculate output amount with fee 计算带费用的输出数量
-        uint256 amountOut = _getAmountOut(amountIn, reserveIn, reserveOut);
+        // Calculate output amount with fee
+        uint256 amountOut = getAmountOut(amountIn, reserveIn, reserveOut);
         
-        // Calculate and collect protocol fee 计算并收集协议费用
-        uint256 protocolFee = (amountIn * swapFee * protocolFeeCut) / (FEE_DENOMINATOR * FEE_DENOMINATOR);
-        if (protocolFee > 0) {
-            IERC20(tokenIn).safeTransfer(feeCollector, protocolFee);
-            amountIn -= protocolFee;
+        // Calculate and collect protocol fee
+        uint256 protocolFee = 0;
+        if (protocolFeeCut > 0 && feeCollector != address(0)) {
+            protocolFee = (amountIn * swapFee * protocolFeeCut) / (FEE_DENOMINATOR * FEE_DENOMINATOR);
+            if (protocolFee > 0) {
+                IERC20(tokenIn).safeTransfer(feeCollector, protocolFee);
+                amountIn -= protocolFee;
+            }
         }
         
-        // Update reserves 更新储备量
+        // Update reserves
         if (isToken0) {
             pairData.reserve0 += amountIn;
             pairData.reserve1 -= amountOut;
@@ -502,25 +576,14 @@ contract SimpleSwapRouter is Ownable {
             pairData.reserve1 += amountIn;
         }
         
-        // Transfer output tokens to recipient 转移输出代币到接收者
+        // Transfer output tokens to recipient
         IERC20(tokenOut).safeTransfer(to, amountOut);
         
         emit Swap(pair, amountIn, amountOut, pairData.reserve0, pairData.reserve1, to);
     }
 
     /**
-     * @dev Internal function to calculate output amount with fee 内部函数计算带费用的输出数量
-     */
-    function _getAmountOut(
-        uint256 amountIn,
-        uint256 reserveIn,
-        uint256 reserveOut
-    ) internal view returns (uint256) {
-        return getAmountOut(amountIn, reserveIn, reserveOut);
-    }
-
-    /**
-     * @dev Internal function to update reserves 内部函数更新储备量
+     * @dev Internal function to update reserves
      */
     function _updateReserves(
         address pair,
@@ -532,8 +595,10 @@ contract SimpleSwapRouter is Ownable {
     ) internal {
         Pair storage pairData = pairs[pair];
         
+        bool isToken0A = tokenA == pairData.token0;
+        
         if (isAddition) {
-            if (tokenA == pairData.token0) {
+            if (isToken0A) {
                 pairData.reserve0 += amountA;
                 pairData.reserve1 += amountB;
             } else {
@@ -541,7 +606,7 @@ contract SimpleSwapRouter is Ownable {
                 pairData.reserve1 += amountA;
             }
         } else {
-            if (tokenA == pairData.token0) {
+            if (isToken0A) {
                 pairData.reserve0 -= amountA;
                 pairData.reserve1 -= amountB;
             } else {
@@ -550,12 +615,12 @@ contract SimpleSwapRouter is Ownable {
             }
         }
         
-        // Update kLast for protocol fee calculation 更新kLast以计算协议费用
+        // Update kLast for protocol fee calculation
         pairData.kLast = pairData.reserve0 * pairData.reserve1;
     }
 
     /**
-     * @dev Internal function to mint LP tokens 内部函数铸造LP代币
+     * @dev Internal function to mint LP tokens
      */
     function _mintLPTokens(
         address pair, 
@@ -570,42 +635,36 @@ contract SimpleSwapRouter is Ownable {
         
         uint256 lpCurrentSupply = IERC20(lpToken).totalSupply();
         
-        // For debugging
-        if (pairData.reserve0 == 0 || pairData.reserve1 == 0) {
-            revert("ZERO_RESERVES");
-        }
-        
+        // Check if this is the first liquidity provision
         if (lpCurrentSupply == 0) {
-            // Initial liquidity provision 初始流动性提供
-            uint256 initialLiquidity = sqrt(pairData.reserve0 * pairData.reserve1);
+            // Initial liquidity provision - calculate using the amounts being added
+            uint256 initialLiquidity = sqrt(amountA * amountB);
             
             // Ensure we have enough initial liquidity
-            require(initialLiquidity >= 1000, "INSUFFICIENT_INITIAL_LIQUIDITY");
+            require(initialLiquidity >= MINIMUM_LIQUIDITY, "INSUFFICIENT_INITIAL_LIQUIDITY");
             
-            liquidity = initialLiquidity - 1000; // Minimum liquidity 最小流动性
+            liquidity = initialLiquidity - MINIMUM_LIQUIDITY;
             
-            // Mint minimum liquidity to this contract address instead of zero address
-            // 将最小流动性铸造到合约地址而不是零地址
-            PairERC20(lpToken).mint(address(this), 1000);
+            // Mint minimum liquidity to this contract address
+            PairERC20(lpToken).mint(address(this), MINIMUM_LIQUIDITY);
         } else {
-            // Subsequent liquidity additions 后续流动性添加
+            // Subsequent liquidity additions
             // Calculate liquidity based on the proportion of tokens added relative to current reserves
-            liquidity = min(
-                (amountA * lpCurrentSupply) / reserveA,
-                (amountB * lpCurrentSupply) / reserveB
-            );
+            uint256 liquidityA = (amountA * lpCurrentSupply) / reserveA;
+            uint256 liquidityB = (amountB * lpCurrentSupply) / reserveB;
+            liquidity = liquidityA < liquidityB ? liquidityA : liquidityB;
         }
         
         require(liquidity > 0, "INSUFFICIENT_LIQUIDITY_MINTED");
         
-        // Mint LP tokens to the recipient 铸造LP代币到接收者
+        // Mint LP tokens to the recipient
         PairERC20(lpToken).mint(to, liquidity);
         
         return liquidity;
     }
 
     /**
-     * @dev Internal function to burn LP tokens 内部函数销毁LP代币
+     * @dev Internal function to burn LP tokens
      */
     function _burnLPTokens(address pair, address from, uint256 liquidity) internal {
         Pair storage pairData = pairs[pair];
@@ -620,7 +679,6 @@ contract SimpleSwapRouter is Ownable {
             PairERC20(lpToken).burn(liquidity);
         } else {
             // For external contracts like Farm, we use burnFrom which checks allowance
-            // This allows Farm contracts to hold LP tokens and approve the router to burn them
             PairERC20(lpToken).burnFrom(from, liquidity);
         }
     }
