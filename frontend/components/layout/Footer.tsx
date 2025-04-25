@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useLanguage } from './Header';
+import DeploymentInfo from '../DeploymentInfo';
 
 export const Footer: React.FC = () => {
   const { language, t } = useLanguage();
   const [mounted, setMounted] = useState(false);
+  const [showDeploymentInfo, setShowDeploymentInfo] = useState(false);
 
   // Handle client-side rendering to prevent hydration mismatch
   useEffect(() => {
@@ -24,7 +26,9 @@ export const Footer: React.FC = () => {
       discord: 'Discord',
       twitter: 'Twitter',
       telegram: 'Telegram',
-      rights: 'All rights reserved.'
+      rights: 'All rights reserved.',
+      showDeployment: 'Show Deployment Info',
+      hideDeployment: 'Hide Deployment Info'
     },
     zh: {
       description: '去中心化平台，用于代币交换、流动性提供和收益农场。',
@@ -37,12 +41,19 @@ export const Footer: React.FC = () => {
       discord: 'Discord',
       twitter: 'Twitter',
       telegram: 'Telegram',
-      rights: '版权所有。'
+      rights: '版权所有。',
+      showDeployment: '显示部署信息',
+      hideDeployment: '隐藏部署信息'
     }
   };
 
   const ft = (key: keyof typeof footerTranslations.en): string => {
     return footerTranslations[language][key];
+  };
+
+  // Toggle deployment info
+  const toggleDeploymentInfo = () => {
+    setShowDeploymentInfo(!showDeploymentInfo);
   };
 
   return (
@@ -122,6 +133,14 @@ export const Footer: React.FC = () => {
                       {ft('forum')}
                     </a>
                   </li>
+                  <li>
+                    <button 
+                      onClick={toggleDeploymentInfo}
+                      className="text-gray-300 hover:text-secondary transition-colors text-sm"
+                    >
+                      {showDeploymentInfo ? ft('hideDeployment') : ft('showDeployment')}
+                    </button>
+                  </li>
                 </>
               )}
             </ul>
@@ -152,6 +171,13 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
         </div>
+        
+        {/* Deployment Info */}
+        {showDeploymentInfo && mounted && (
+          <div className="mt-8">
+            <DeploymentInfo />
+          </div>
+        )}
         
         <div className="border-t border-primary/10 mt-8 pt-8 text-center text-gray-300 text-sm">
           <p>&copy; {new Date().getFullYear()} AIHarvest. {ft('rights')}</p>
