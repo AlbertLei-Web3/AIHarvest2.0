@@ -9,6 +9,7 @@ export * from './types';
 export * from './abis';
 export * from './helpers';
 export * from './erc20';
+export * from './tokenUtils';
 export * from './router';
 export * from './liquidity';
 export * from './farm'; 
