@@ -18,6 +18,7 @@ import {
   addLPTokenToWallet
 } from '@/utils/contracts';
 import { ethers } from 'ethers';
+import { useRouter } from 'next/router';
 
 interface Token {
   name: string;
@@ -90,6 +91,8 @@ interface LiquidityTranslation {
   copy: string;
   lpTokenBalance: string;
   addToWallet: string;
+  stakeInFarm: string;
+  goToFarm: string;
 }
 
 interface LiquidityTranslationsType {
@@ -251,7 +254,9 @@ const LiquidityPage = () => {
       pairAddress: 'Pair Address',
       copy: 'Copy',
       lpTokenBalance: 'LP Token Balance',
-      addToWallet: 'Add to Wallet'
+      addToWallet: 'Add to Wallet',
+      stakeInFarm: 'Stake LP Tokens in Farm',
+      goToFarm: 'Go to Farm'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -294,7 +299,9 @@ const LiquidityPage = () => {
       pairAddress: '交易对地址',
       copy: '复制',
       lpTokenBalance: 'LP代币余额',
-      addToWallet: '添加到钱包'
+      addToWallet: '添加到钱包',
+      stakeInFarm: '在农场质押LP代币',
+      goToFarm: '前往农场'
     }
   };
   
@@ -1027,6 +1034,27 @@ const LiquidityPage = () => {
       // Wait for confirmation
       const receipt = await addLiquidityTx.wait();
       
+      // Add this code after receipt is confirmed
+      console.log("Transaction receipt:", receipt);
+      
+      // Get pair address to find LP token
+      const pairAddress = await getRouterContract().getPairAddress(
+        tokens[tokenA].address,
+        tokens[tokenB].address
+      );
+      
+      if (pairAddress && pairAddress !== ethers.constants.AddressZero) {
+        // Store LP info for staking redirection
+        setStakingInfo({
+          lpToken: pairAddress,
+          tokenA: tokens[tokenA].address,
+          tokenB: tokens[tokenB].address,
+          amount: lpAmount
+        });
+        
+        setShowStakingOption(true);
+      }
+      
       hideLoading();
       showSuccess(lt('liquidityAdded'));
       
@@ -1738,6 +1766,63 @@ const LiquidityPage = () => {
     return Math.floor(num).toString();
   };
 
+  // Add new state variables
+  const [showStakingOption, setShowStakingOption] = useState<boolean>(false);
+  const [stakingInfo, setStakingInfo] = useState<{
+    lpToken: string;
+    tokenA: string;
+    tokenB: string;
+    amount: string;
+  } | null>(null);
+  const router = useRouter();
+  
+  // Add a new function to redirect to the Farm page
+  const redirectToFarm = () => {
+    if (!stakingInfo) return;
+    
+    // Redirect to the farm page with LP token information
+    router.push({
+      pathname: '/farm',
+      query: {
+        lpToken: stakingInfo.lpToken,
+        tokenA: stakingInfo.tokenA,
+        tokenB: stakingInfo.tokenB,
+        amount: stakingInfo.amount
+      }
+    });
+  };
+  
+  // Create a notification component for staking option
+  const StakingOptionNotification = () => {
+    if (!showStakingOption || !stakingInfo) return null;
+    
+    return (
+      <div className="fixed bottom-6 right-6 bg-green-900 p-4 rounded-lg shadow-lg border border-green-700 max-w-md z-50">
+        <div className="flex flex-col">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-white font-bold">{lt('liquidityAdded')}</h3>
+            <button 
+              onClick={() => setShowStakingOption(false)} 
+              className="text-gray-300 hover:text-white"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-green-200 mb-3">{lt('stakeInFarm')}</p>
+          <button 
+            onClick={redirectToFarm}
+            className="w-full bg-green-700 hover:bg-green-600 text-white py-2 px-4 rounded-md transition-colors"
+          >
+            {lt('goToFarm')}
+          </button>
+        </div>
+      </div>
+    );
+  };
+  
+  // Add the notification component to the return section
   return (
     <div className="container mx-auto px-4 py-8">
       {/* 全局通知组件 */}
@@ -2211,6 +2296,7 @@ const LiquidityPage = () => {
           </div>
         </div>
       )}
+      <StakingOptionNotification />
     </div>
   );
 };
