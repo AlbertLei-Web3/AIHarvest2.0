@@ -5,15 +5,30 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "./AIHToken.sol";
+
+interface ISimpleSwapRouter {
+    function farmRemoveLiquidity(
+        address tokenA,
+        address tokenB,
+        uint256 liquidity,
+        uint256 amountAMin,
+        uint256 amountBMin,
+        address from,
+        address to
+    ) external returns (uint256 amountA, uint256 amountB);
+}
 
 /**
  * @title SimpleFarm
  * @dev Staking contract for LP tokens with AIH token rewards
+ * This contract follows the Checks-Effects-Interactions pattern to prevent reentrancy attacks
  */
 contract SimpleFarm is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeERC20 for AIHToken;
+    using SafeMath for uint256;
 
     // Constants for calculations
     uint256 private constant PRECISION_FACTOR = 1e12;
@@ -61,6 +76,9 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     event PoolUpdated(uint256 indexed pid, uint256 allocPoint);
     event PoolRewardUpdated(uint256 indexed pid, uint256 lastRewardTime, uint256 lpSupply, uint256 accAIHPerShare);
     event RewardRateUpdated(uint256 oldRate, uint256 newRate);
+    event Harvest(address indexed user, uint256 indexed pid, uint256 amount);
+    event InsufficientAIHForReward(uint256 requested, uint256 available);
+    event LiquidityRemoved(address indexed user, uint256 indexed pid, uint256 amount, uint256 amountA, uint256 amountB);
 
     /**
      * @dev Constructor
@@ -216,142 +234,179 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Deposit LP tokens to the farm for AIH allocation
-     * @param _pid Pool ID
-     * @param _amount Amount of LP tokens to deposit
+     * @notice Deposit LP tokens to the farm for AIH allocation
+     * @dev Follows the CEI (Checks-Effects-Interactions) pattern for reentrancy protection:
+     *      1. Checks: Validate pool ID and amount
+     *      2. Effects: Update pool and user state
+     *      3. Interactions: External token transfers (last step)
+     * @param _pid The pool ID to deposit to
+     * @param _amount The amount of LP tokens to deposit
      */
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
-        require(_pid < poolInfo.length, "Pool does not exist");
-        require(_amount >= 0, "Amount must be >= 0");
+        // CHECKS: Validate inputs
+        require(_pid < poolInfo.length, "SimpleFarm: Invalid pool ID");
+        require(_amount > 0, "SimpleFarm: Amount must be greater than 0");
         
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
+        // Update pool to calculate current rewards
         updatePool(_pid);
         
-        // Cache accAIHPerShare for gas savings
-        uint256 accAIHPerShare = pool.accAIHPerShare;
-        
-        // Harvest any pending rewards
+        // Calculate pending rewards if user already has staked LP tokens
+        uint256 pending = 0;
         if (user.amount > 0) {
-            uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt;
+            pending = (user.amount * pool.accAIHPerShare / PRECISION_FACTOR) - user.rewardDebt;
+        }
+        
+        // EFFECTS: Update user and pool state
+        // Update the amount of LP tokens staked by user
+        user.amount += _amount;
+        
+        // Update total staked amount in the pool
+        pool.totalStaked += _amount;
+        
+        // Update reward debt to reflect the new amount of staked LP tokens
+        user.rewardDebt = user.amount * pool.accAIHPerShare / PRECISION_FACTOR;
+        
+        // INTERACTIONS: Perform external interactions last to prevent reentrancy
+        // Transfer pending rewards if any
+        if (pending > 0) {
+            uint256 aihBalance = aihToken.balanceOf(address(this));
+            if (aihBalance < pending) {
+                emit InsufficientAIHForReward(pending, aihBalance);
+                pending = aihBalance;
+            }
+            
             if (pending > 0) {
-                user.pendingRewards += pending;
+                aihToken.safeTransfer(address(msg.sender), pending);
+                emit RewardPaid(msg.sender, pending);
             }
         }
         
-        if (_amount > 0) {
-            // Check user's balance before transfer
-            uint256 beforeBalance = pool.lpToken.balanceOf(address(this));
-            
-            // Transfer LP tokens to contract
-            pool.lpToken.safeTransferFrom(msg.sender, address(this), _amount);
-            
-            // Confirm tokens received for security
-            uint256 afterBalance = pool.lpToken.balanceOf(address(this));
-            require(afterBalance >= beforeBalance + _amount, "Transfer did not receive expected amount");
-            
-            // Update storage - unchecked is safe with Solidity 0.8+ overflow protection
-            user.amount += _amount;
-            pool.totalStaked += _amount;
-        }
-        
-        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
+        // Transfer LP tokens from user to this contract
+        pool.lpToken.safeTransferFrom(address(msg.sender), address(this), _amount);
         
         emit Deposit(msg.sender, _pid, _amount);
     }
 
     /**
-     * @dev Withdraw LP tokens from the farm
-     * @param _pid Pool ID
-     * @param _amount Amount of LP tokens to withdraw
+     * @dev Withdraw LP tokens from the farm.
+     * @notice This function is protected against reentrancy attacks
+     * Following the CEI (Checks-Effects-Interactions) pattern:
+     * 1. Checks: Validate inputs and state
+     * 2. Effects: Update contract state
+     * 3. Interactions: Transfer tokens (external calls)
      */
     function withdraw(uint256 _pid, uint256 _amount) external nonReentrant {
-        require(_pid < poolInfo.length, "Pool does not exist");
+        require(_pid < poolInfo.length, "SimpleFarm: Invalid pool ID");
         
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
-        require(user.amount >= _amount, "Withdraw: not enough balance");
+        // CHECKS: Ensure user has enough LP tokens staked
+        require(user.amount >= _amount, "SimpleFarm: Insufficient staked amount");
         
+        // First update pool and calculate pending rewards
         updatePool(_pid);
         
-        // Cache accAIHPerShare for gas savings
-        uint256 accAIHPerShare = pool.accAIHPerShare;
+        // Calculate pending rewards
+        uint256 pendingAmount = user.amount * pool.accAIHPerShare / PRECISION_FACTOR - user.rewardDebt;
         
-        // Harvest pending rewards
-        uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt + user.pendingRewards;
-        if (pending > 0) {
-            user.pendingRewards = 0;
-            safeAIHTransfer(msg.sender, pending);
-            emit RewardPaid(msg.sender, pending);
-        }
+        // EFFECTS: Update state variables
+        user.amount -= _amount;
+        // Update total staked amount in the pool
+        pool.totalStaked -= _amount;
+        user.rewardDebt = user.amount * pool.accAIHPerShare / PRECISION_FACTOR;
         
-        if (_amount > 0) {
-            // Update storage - unchecked is safe with Solidity 0.8+ overflow protection
-            user.amount -= _amount;
-            pool.totalStaked -= _amount;
+        // INTERACTIONS: Transfer tokens (external calls last to prevent reentrancy)
+        // Pay rewards if any
+        if (pendingAmount > 0) {
+            uint256 aihBalance = aihToken.balanceOf(address(this));
+            if (aihBalance < pendingAmount) {
+                emit InsufficientAIHForReward(pendingAmount, aihBalance);
+                pendingAmount = aihBalance;
+            }
             
-            // Transfer LP tokens back to user
-            pool.lpToken.safeTransfer(msg.sender, _amount);
+            if (pendingAmount > 0) {
+                aihToken.safeTransfer(msg.sender, pendingAmount);
+                emit RewardPaid(msg.sender, pendingAmount);
+            }
         }
         
-        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
+        // Transfer LP tokens back to the user
+        pool.lpToken.safeTransfer(msg.sender, _amount);
         
         emit Withdraw(msg.sender, _pid, _amount);
     }
 
     /**
-     * @dev Harvest rewards without withdrawing LP tokens
-     * @param _pid Pool ID
+     * @dev Harvest pending AIH rewards without withdrawing LP tokens.
+     * @notice This function is protected against reentrancy attacks
+     * Following the CEI (Checks-Effects-Interactions) pattern:
+     * 1. Checks: Validate inputs and state
+     * 2. Effects: Update contract state
+     * 3. Interactions: Transfer tokens (external calls)
      */
     function harvest(uint256 _pid) external nonReentrant {
-        require(_pid < poolInfo.length, "Pool does not exist");
+        require(_pid < poolInfo.length, "SimpleFarm: Invalid pool ID");
         
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
-        // Skip empty harvest operations
-        require(user.amount > 0, "Nothing to harvest");
+        // CHECKS: Ensure user has staked LP tokens
+        require(user.amount > 0, "SimpleFarm: No staked LP tokens");
         
+        // Update pool to ensure accurate rewards calculation
         updatePool(_pid);
         
-        // Cache accAIHPerShare for gas savings
-        uint256 accAIHPerShare = pool.accAIHPerShare;
+        // Calculate pending rewards
+        uint256 pendingAmount = user.amount * pool.accAIHPerShare / PRECISION_FACTOR - user.rewardDebt;
         
-        uint256 pending = (user.amount * accAIHPerShare) / PRECISION_FACTOR - user.rewardDebt + user.pendingRewards;
-        if (pending > 0) {
-            user.pendingRewards = 0;
-            safeAIHTransfer(msg.sender, pending);
-            emit RewardPaid(msg.sender, pending);
+        // CHECKS: Ensure there are rewards to harvest
+        require(pendingAmount > 0, "SimpleFarm: No rewards to harvest");
+        
+        // EFFECTS: Update state variables
+        user.rewardDebt = user.amount * pool.accAIHPerShare / PRECISION_FACTOR;
+        
+        // INTERACTIONS: Transfer tokens (external calls last to prevent reentrancy)
+        // Pay rewards
+        uint256 aihBalance = aihToken.balanceOf(address(this));
+        if (aihBalance < pendingAmount) {
+            emit InsufficientAIHForReward(pendingAmount, aihBalance);
+            pendingAmount = aihBalance;
         }
         
-        user.rewardDebt = (user.amount * accAIHPerShare) / PRECISION_FACTOR;
+        if (pendingAmount > 0) {
+            aihToken.safeTransfer(msg.sender, pendingAmount);
+            emit RewardPaid(msg.sender, pendingAmount);
+            emit Harvest(msg.sender, _pid, pendingAmount);
+        }
     }
 
     /**
-     * @dev Withdraw without caring about rewards (EMERGENCY ONLY)
-     * @param _pid Pool ID
+     * @dev Emergency withdraw LP tokens from the farm.
+     * @notice This function bypasses reward distribution but is still protected against reentrancy
+     * Following the CEI pattern with reduced logic for emergency situations
      */
     function emergencyWithdraw(uint256 _pid) external nonReentrant {
-        require(_pid < poolInfo.length, "Pool does not exist");
+        require(_pid < poolInfo.length, "SimpleFarm: Invalid pool ID");
         
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][msg.sender];
         
-        // Cache amount for gas savings
+        // CHECKS
         uint256 amount = user.amount;
+        require(amount > 0, "SimpleFarm: No tokens to withdraw");
         
-        // Skip empty withdrawals
-        require(amount > 0, "Nothing to withdraw");
-        
-        // Reset user data first (to prevent reentrancy)
-        pool.totalStaked -= amount;
+        // EFFECTS: Zero out user info first
         user.amount = 0;
         user.rewardDebt = 0;
-        user.pendingRewards = 0;
         
-        // Transfer LP tokens back to user
+        // Update total staked amount in the pool
+        pool.totalStaked -= amount;
+        
+        // INTERACTIONS: Transfer tokens last (external call)
         pool.lpToken.safeTransfer(msg.sender, amount);
         
         emit EmergencyWithdraw(msg.sender, _pid, amount);

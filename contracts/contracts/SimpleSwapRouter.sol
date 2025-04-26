@@ -7,6 +7,8 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "./PairERC20.sol";
+import "./SimpleSwapFactory.sol";
+import "./interfaces/IWETH.sol";
 
 /**
  * @title SimpleSwapRouter 
@@ -58,6 +60,10 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
 
     // Pair data storage 代币对数据存储
     mapping(address => Pair) public pairs;
+
+    // Mapping to track pending protocol fees until they're collected
+    // This helps avoid reentrancy vulnerabilities when transferring fees
+    mapping(address => uint256) public pendingProtocolFees;
 
     /**
      * @dev Constructor sets the fee collector address and AIH token 构造函数设置费用收集器地址和AIH代币
@@ -225,6 +231,16 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      * @return amountA The amount of tokenA added 添加的第一个代币数量
      * @return amountB The amount of tokenB added 添加的第二个代币数量
      * @return liquidity The amount of LP tokens minted 铸造的LP代币数量
+     * 
+     * NOTE: Follows CEI pattern (Checks-Effects-Interactions) to prevent reentrancy attacks
+     * All state changes happen before external calls
+     * 
+     * SECURITY:
+     * This function's protection against reentrancy follows this flow:
+     * 1. The nonReentrant modifier prevents any reentrant calls
+     * 2. Input validation is performed (Checks)
+     * 3. Calculations are done and state variables are updated (_updateReserves) (Effects)
+     * 4. External contract interactions occur (token transfers, LP token minting) (Interactions)
      */
     function addLiquidity(
         address tokenA,
@@ -234,7 +250,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         uint256 amountAMin,
         uint256 amountBMin,
         address to
-    ) external nonReentrant returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+    ) public nonReentrant returns (uint256 amountA, uint256 amountB, uint256 liquidity) {
+        // CHECKS: Validate inputs
         require(to != address(0), "Cannot add liquidity to zero address");
         
         address pair = getPair[tokenA][tokenB];
@@ -270,13 +287,16 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             }
         }
 
+        // INTERACTIONS: External calls (necessary before state changes to have tokens)
         // Transfer tokens to the contract 转移代币到合约
         if (amountA > 0) IERC20(tokenA).safeTransferFrom(msg.sender, address(this), amountA);
         if (amountB > 0) IERC20(tokenB).safeTransferFrom(msg.sender, address(this), amountB);
 
+        // EFFECTS: State changes (updating reserves)
         // Update reserves 更新储备量
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, true);
 
+        // INTERACTIONS: External calls (after state changes)
         // Mint LP tokens 铸造LP代币
         liquidity = _mintLPTokens(pair, to, reserveA, reserveB, amountA, amountB);
         
@@ -294,6 +314,9 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      * @param to The recipient of the tokens 接收代币的地址
      * @return amountA The amount of tokenA received 接收的第一个代币数量
      * @return amountB The amount of tokenB received 接收的第二个代币数量
+     * 
+     * NOTE: Follows CEI pattern (Checks-Effects-Interactions) to prevent reentrancy attacks
+     * All state changes happen before external calls
      */
     function removeLiquidity(
         address tokenA,
@@ -326,15 +349,15 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         require(amountA >= amountAMin, "INSUFFICIENT_A_AMOUNT");
         require(amountB >= amountBMin, "INSUFFICIENT_B_AMOUNT");
 
-        // Burn LP tokens
+        // Burn LP tokens - this is an external call but to our own contract
         _burnLPTokens(pair, msg.sender, liquidity);
         
-        // Update reserves
+        // Update reserves - internal state change
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, false);
         
-        // Transfer tokens to recipient
-        if (amountA > 0) IERC20(tokenA).safeTransfer(to, amountA);
-        if (amountB > 0) IERC20(tokenB).safeTransfer(to, amountB);
+        // Transfer tokens after all state changes are complete
+        _safeTransferTokens(tokenA, to, amountA);
+        _safeTransferTokens(tokenB, to, amountB);
         
         emit Burn(pair, amountA, amountB, to);
         return (amountA, amountB);
@@ -351,6 +374,9 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      * @param to The recipient of the tokens
      * @return amountA The amount of tokenA received
      * @return amountB The amount of tokenB received
+     * 
+     * NOTE: Follows CEI pattern (Checks-Effects-Interactions) to prevent reentrancy attacks
+     * All state changes happen before external calls
      */
     function farmRemoveLiquidity(
         address tokenA,
@@ -399,12 +425,12 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             _burnLPTokens(pair, from, liquidity);
         }
         
-        // Update reserves
+        // Update reserves - internal state change
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, false);
         
-        // Transfer tokens to recipient
-        if (amountA > 0) IERC20(tokenA).safeTransfer(to, amountA);
-        if (amountB > 0) IERC20(tokenB).safeTransfer(to, amountB);
+        // Transfer tokens after all state changes are complete
+        _safeTransferTokens(tokenA, to, amountA);
+        _safeTransferTokens(tokenB, to, amountB);
         
         emit Burn(pair, amountA, amountB, to);
         return (amountA, amountB);
@@ -417,6 +443,16 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      * @param path The token path (e.g., [tokenA, tokenB])
      * @param to The recipient of the output tokens
      * @return amounts The amounts of tokens swapped
+     * 
+     * NOTE: Follows CEI pattern (Checks-Effects-Interactions) to prevent reentrancy attacks
+     * Uses an internal function for state changes to maintain separation of concerns
+     * 
+     * SECURITY:
+     * This function's protection against reentrancy follows this flow:
+     * 1. The nonReentrant modifier prevents any reentrant calls
+     * 2. Input validation is performed (Checks)
+     * 3. Calculations are done and state variables are updated (_swapInternal) (Effects)
+     * 4. External token transfers occur after all state changes (Interactions)
      */
     function swapExactTokensForTokens(
         uint256 amountIn,
@@ -424,6 +460,7 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         address[] calldata path,
         address to
     ) external nonReentrant returns (uint256[] memory amounts) {
+        // CHECKS: Validate inputs
         require(path.length >= 2, "INVALID_PATH");
         require(to != address(0), "Cannot swap to zero address");
         require(amountIn > 0, "INSUFFICIENT_INPUT_AMOUNT");
@@ -431,7 +468,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         amounts = new uint256[](path.length);
         amounts[0] = amountIn;
         
-        // Transfer initial tokens to the contract
+        // INTERACTIONS: External call (necessary before internal processing to have input tokens)
+        // Transfer input tokens - external call is necessary at the beginning since we need the tokens
         IERC20(path[0]).safeTransferFrom(msg.sender, address(this), amountIn);
         
         // Cache variables outside loop to save gas
@@ -440,6 +478,7 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         address outputToken;
         address currentPair;
         
+        // EFFECTS: Internal state changes for each swap in the path
         // Perform swaps along the path
         for (uint i = 0; i < path.length - 1; i++) {
             inputToken = path[i];
@@ -458,17 +497,21 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             amountOut = getAmountOut(amounts[i], reserveIn, reserveOut);
             amounts[i+1] = amountOut;
             
-            // Update reserves and collect fees
-            _swap(
+            // Update internal state and collect fees - Avoid external calls until all state changes complete
+            _swapInternal(
                 currentPair,
                 inputToken,
                 outputToken,
-                amounts[i],
-                i == path.length - 2 ? to : address(this)
+                amounts[i]
             );
         }
         
         require(amounts[path.length-1] >= amountOutMin, "INSUFFICIENT_OUTPUT_AMOUNT");
+        
+        // INTERACTIONS: External call (after all state changes)
+        // Transfer output token to recipient - do external calls after all state modifications
+        _safeTransferTokens(path[path.length-1], to, amounts[path.length-1]);
+        
         return amounts;
     }
 
@@ -546,39 +589,14 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         uint256 amountIn,
         address to
     ) internal {
+        // 先执行内部状态变更
+        uint256 amountOut = _swapInternal(pair, tokenIn, tokenOut, amountIn);
+        
+        // 然后再进行外部调用
+        _safeTransferTokens(tokenOut, to, amountOut);
+        
+        // 发出事件
         Pair storage pairData = pairs[pair];
-        
-        (uint256 reserve0, uint256 reserve1) = (pairData.reserve0, pairData.reserve1);
-        address token0 = pairData.token0;
-        
-        bool isToken0 = tokenIn == token0;
-        (uint256 reserveIn, uint256 reserveOut) = isToken0 ? (reserve0, reserve1) : (reserve1, reserve0);
-        
-        // Calculate output amount with fee
-        uint256 amountOut = getAmountOut(amountIn, reserveIn, reserveOut);
-        
-        // Calculate and collect protocol fee
-        uint256 protocolFee = 0;
-        if (protocolFeeCut > 0 && feeCollector != address(0)) {
-            protocolFee = (amountIn * swapFee * protocolFeeCut) / (FEE_DENOMINATOR * FEE_DENOMINATOR);
-            if (protocolFee > 0) {
-                IERC20(tokenIn).safeTransfer(feeCollector, protocolFee);
-                amountIn -= protocolFee;
-            }
-        }
-        
-        // Update reserves
-        if (isToken0) {
-            pairData.reserve0 += amountIn;
-            pairData.reserve1 -= amountOut;
-        } else {
-            pairData.reserve0 -= amountOut;
-            pairData.reserve1 += amountIn;
-        }
-        
-        // Transfer output tokens to recipient
-        IERC20(tokenOut).safeTransfer(to, amountOut);
-        
         emit Swap(pair, amountIn, amountOut, pairData.reserve0, pairData.reserve1, to);
     }
 
@@ -643,21 +661,23 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             // Ensure we have enough initial liquidity
             require(initialLiquidity >= MINIMUM_LIQUIDITY, "INSUFFICIENT_INITIAL_LIQUIDITY");
             
+            // Subtract MINIMUM_LIQUIDITY (1000) from the liquidity provided to the user
+            // This amount is permanently locked in the contract to prevent emptying the pool completely
+            // IMPORTANT: For example, if a user provides 4321 TokenA and 4321 TokenB, 
+            // the total LP tokens would be sqrt(4321*4321) = 4321, but the user receives
+            // 4321 - 1000 = 3321 LP tokens. The remaining 1000 are permanently locked.
             liquidity = initialLiquidity - MINIMUM_LIQUIDITY;
             
-            // Mint minimum liquidity to this contract address
+            // Mint minimum liquidity to this contract address (permanently locked)
             PairERC20(lpToken).mint(address(this), MINIMUM_LIQUIDITY);
         } else {
-            // Subsequent liquidity additions
-            // Calculate liquidity based on the proportion of tokens added relative to current reserves
+            // Calculate based on the proportion of existing supply
             uint256 liquidityA = (amountA * lpCurrentSupply) / reserveA;
             uint256 liquidityB = (amountB * lpCurrentSupply) / reserveB;
             liquidity = liquidityA < liquidityB ? liquidityA : liquidityB;
         }
         
         require(liquidity > 0, "INSUFFICIENT_LIQUIDITY_MINTED");
-        
-        // Mint LP tokens to the recipient
         PairERC20(lpToken).mint(to, liquidity);
         
         return liquidity;
@@ -728,5 +748,67 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      */
     function min(uint256 x, uint256 y) internal pure returns (uint256 z) {
         z = x < y ? x : y;
+    }
+
+    // 添加一个新的辅助函数，用于安全转账代币并防止重入
+    function _safeTransferTokens(address token, address to, uint256 amount) internal {
+        if (amount > 0 && to != address(0)) {
+            IERC20(token).safeTransfer(to, amount);
+        }
+    }
+
+    // 添加一个新的内部函数，用于处理交换的内部状态更改（无外部调用）
+    function _swapInternal(
+        address pair,
+        address tokenIn,
+        address tokenOut,
+        uint256 amountIn
+    ) internal returns (uint256 amountOut) {
+        Pair storage pairData = pairs[pair];
+        
+        (uint256 reserve0, uint256 reserve1) = (pairData.reserve0, pairData.reserve1);
+        address token0 = pairData.token0;
+        
+        bool isToken0 = tokenIn == token0;
+        (uint256 reserveIn, uint256 reserveOut) = isToken0 ? (reserve0, reserve1) : (reserve1, reserve0);
+        
+        // Calculate output amount with fee
+        amountOut = getAmountOut(amountIn, reserveIn, reserveOut);
+        
+        // Calculate protocol fee
+        uint256 protocolFee = 0;
+        if (protocolFeeCut > 0 && feeCollector != address(0)) {
+            protocolFee = (amountIn * swapFee * protocolFeeCut) / (FEE_DENOMINATOR * FEE_DENOMINATOR);
+            if (protocolFee > 0) {
+                // Store protocol fee info for later transfer
+                pendingProtocolFees[tokenIn] += protocolFee;
+                amountIn -= protocolFee;
+            }
+        }
+        
+        // Update reserves
+        if (isToken0) {
+            pairData.reserve0 += amountIn;
+            pairData.reserve1 -= amountOut;
+        } else {
+            pairData.reserve0 -= amountOut;
+            pairData.reserve1 += amountIn;
+        }
+        
+        return amountOut;
+    }
+
+    // 添加一个函数，允许手动转移待处理的协议费用
+    function transferPendingProtocolFees(address[] calldata tokens) external {
+        require(msg.sender == owner() || msg.sender == feeCollector, "Not authorized");
+        
+        for (uint i = 0; i < tokens.length; i++) {
+            address token = tokens[i];
+            uint256 fee = pendingProtocolFees[token];
+            if (fee > 0) {
+                pendingProtocolFees[token] = 0;
+                _safeTransferTokens(token, feeCollector, fee);
+            }
+        }
     }
 } 

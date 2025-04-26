@@ -1,22 +1,27 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying AIHarvest contracts...");
+  console.log("Deploying AIHarvest contracts to", hre.network.name, "network...");
 
   try {
     // Get the contract factories
     const AIHToken = await hre.ethers.getContractFactory("AIHToken");
     const SimpleSwapRouter = await hre.ethers.getContractFactory("SimpleSwapRouter");
     const SimpleFarm = await hre.ethers.getContractFactory("SimpleFarm");
+    // Add any new contract factories here
+    // const NewContract = await hre.ethers.getContractFactory("NewContract");
     
     // Get signers
     const signers = await hre.ethers.getSigners();
     console.log("Deploying with account:", signers[0].address);
     
-    // Get gas price for optimized deployment
+    // Get gas price for optimized deployment - Sepolia may need higher values
     const gasPrice = await hre.ethers.provider.getGasPrice();
-    // Use slightly higher gas price to ensure faster confirmation
-    const optimizedGasPrice = gasPrice.mul(110).div(100); // 10% higher than current
+    // Use slightly higher gas price for Sepolia to ensure faster confirmation
+    const optimizedGasPrice = hre.network.name === "sepolia" 
+      ? gasPrice.mul(120).div(100)  // 20% higher for Sepolia
+      : gasPrice.mul(110).div(100); // 10% higher for other networks
+    
     console.log("Current gas price:", hre.ethers.utils.formatUnits(gasPrice, "gwei"), "gwei");
     console.log("Using gas price:", hre.ethers.utils.formatUnits(optimizedGasPrice, "gwei"), "gwei");
     
@@ -64,6 +69,16 @@ async function main() {
     const farmAddress = simpleFarm.address;
     console.log("SimpleFarm deployed to:", farmAddress);
     
+    // Deploy any new contracts here
+    // console.log("Deploying NewContract...");
+    // const newContract = await NewContract.deploy(
+    //   // Constructor parameters
+    //   { gasPrice: optimizedGasPrice }
+    // );
+    // await newContract.deployed();
+    // const newContractAddress = newContract.address;
+    // console.log("NewContract deployed to:", newContractAddress);
+    
     // Set farm address in token contract
     console.log("Setting farm address in token contract...");
     const setFarmTx = await aihToken.setFarmAddress(
@@ -108,6 +123,8 @@ async function main() {
       console.log("Farm reward rate set. Gas used:", setRewardRateReceipt.gasUsed.toString());
     }
     
+    // Add any custom initialization for new contracts here
+    
     console.log("Deployment complete!");
     
     // Save deployment addresses
@@ -116,6 +133,8 @@ async function main() {
       AIHToken: tokenAddress,
       SimpleSwapRouter: routerAddress,
       SimpleFarm: farmAddress,
+      // Add new contract addresses here
+      // NewContract: newContractAddress,
       network: hre.network.name,
       chainId: (await hre.ethers.provider.getNetwork()).chainId,
       deploymentTime: new Date().toISOString(),
@@ -142,12 +161,13 @@ async function main() {
     );
     console.log(`Latest deployment info saved to: deployments/${hre.network.name}_latest.json`);
     
-    // Verify contracts if on a supported network (optional, enable as needed)
+    // Verify contracts if on a supported network (Sepolia is supported)
     if (process.env.VERIFY_CONTRACTS === "true" && 
         (hre.network.name !== "hardhat" && hre.network.name !== "localhost")) {
       console.log("Waiting for block confirmations before verification...");
-      // Wait for 5 block confirmations to ensure contracts are properly deployed
-      await new Promise(resolve => setTimeout(resolve, 30000)); // 30 sec delay
+      // For Sepolia, wait longer for confirmations as it might be slower
+      const waitTime = hre.network.name === "sepolia" ? 60000 : 30000; // 60 sec for Sepolia, 30 sec for others
+      await new Promise(resolve => setTimeout(resolve, waitTime));
       
       try {
         console.log("Verifying AIHToken...");
@@ -170,6 +190,14 @@ async function main() {
           constructorArguments: [tokenAddress],
         });
         console.log("SimpleFarm verified!");
+        
+        // Add verification for new contracts here
+        // console.log("Verifying NewContract...");
+        // await hre.run("verify:verify", {
+        //   address: newContractAddress,
+        //   constructorArguments: [/* constructor args */],
+        // });
+        // console.log("NewContract verified!");
         
       } catch (error) {
         console.error("Error during contract verification:", error);
