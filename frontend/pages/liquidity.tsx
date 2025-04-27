@@ -2,21 +2,17 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import Image from 'next/image';
+import { TOKENS } from '@/utils/contracts/addresses';
 import { 
-  TOKENS, 
-  getTokenBalance, 
-  getPairReserves, 
   calculateLPTokenAmount, 
   addLiquidity,
   removeLiquidity,
-  approveToken,
+  approveLPToken, 
   getUserLiquidityPositions,
-  approveLPToken,
-  getRouterContract,
-  getTokenContract,
-  createTokenPair,
-  addLPTokenToWallet
-} from '@/utils/contracts';
+  addLPTokenToWallet 
+} from '@/utils/contracts/liquidity';
+import { getTokenBalance, approveToken, getTokenContract } from '@/utils/contracts/erc20';
+import { getRouterContract, getPairReserves, createTokenPair } from '@/utils/contracts/router';
 import { ethers } from 'ethers';
 import { useRouter } from 'next/router';
 
@@ -103,14 +99,6 @@ interface LiquidityTranslationsType {
 
 // Updated token data - removed USDT, DAI and kept custom tokens
 const tokensData: TokensType = {
-  eth: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    balance: '0',
-    decimals: 18,
-    address: TOKENS.ETH
-  },
   aih: {
     name: 'AIH Token',
     symbol: 'AIH',
@@ -163,23 +151,27 @@ const tokensData: TokensType = {
 
 // Update exchange rates to only include relevant pairs
 const exchangeRates: ExchangeRatesType = {
-  'eth_aih': 1000,
-  'eth_td': 100,
-  'eth_fhbi': 100,
-  'eth_fhbi2': 100,
-  'eth_fhbi3': 100,
-  'eth_rtk': 100,
   'aih_td': 10,
   'aih_fhbi': 10,
   'aih_fhbi2': 10,
   'aih_fhbi3': 10,
-  'aih_rtk': 10
+  'aih_rtk': 10,
+  'td_fhbi': 1,
+  'td_fhbi2': 1,
+  'td_fhbi3': 1,
+  'td_rtk': 1,
+  'fhbi_fhbi2': 1,
+  'fhbi_fhbi3': 1,
+  'fhbi_rtk': 1,
+  'fhbi2_fhbi3': 1,
+  'fhbi2_rtk': 1,
+  'fhbi3_rtk': 1
 };
 
 const LiquidityPage = () => {
   const [tokens, setTokens] = useState<TokensType>(tokensData);
-  const [tokenA, setTokenA] = useState<string>('eth');
-  const [tokenB, setTokenB] = useState<string>('aih');
+  const [tokenA, setTokenA] = useState<string>('aih');
+  const [tokenB, setTokenB] = useState<string>('td');
   const [tokenAAmount, setTokenAAmount] = useState<string>('');
   const [tokenBAmount, setTokenBAmount] = useState<string>('');
   const [currentSelector, setCurrentSelector] = useState<string | null>(null);

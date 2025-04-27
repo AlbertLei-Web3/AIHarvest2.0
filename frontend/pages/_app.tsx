@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http } from 'viem';
 import { injected } from 'wagmi/connectors';
 import dynamic from 'next/dynamic';
+import { LiquidityProvider } from '@/contexts/LiquidityContext';
 
 console.log('Creating Wagmi config...'); // 添加调试日志
 
@@ -37,9 +38,11 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <WagmiConfig config={config}>
       <QueryClientProvider client={queryClient}>
-        <Layout>
-          <Component {...pageProps} />
-        </Layout>
+        <LiquidityProvider>
+          <Layout>
+            <Component {...pageProps} />
+          </Layout>
+        </LiquidityProvider>
       </QueryClientProvider>
     </WagmiConfig>
   );

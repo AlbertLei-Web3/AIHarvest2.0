@@ -2,7 +2,7 @@
  * Liquidity provider related functions
  */
 import { ethers } from 'ethers';
-import { logger, getSigner } from './helpers';
+import { logger, getSigner, getProvider } from './helpers';
 import { getRouterContract } from './router';
 import { getTokenInfo, getTokenContract } from './erc20';
 import { CONTRACTS } from './addresses';
@@ -495,6 +495,7 @@ export const getUserLiquidityPositions = async (
     }
     
     const router = getRouterContract();
+    const provider = getProvider();
     const positions: LiquidityPosition[] = [];
     
     // Process pairs in batches to avoid overloading the RPC
@@ -511,14 +512,30 @@ export const getUserLiquidityPositions = async (
               return null;
             }
         
-            // Get pair address
-            const pairAddress = await router.getPairAddress(tokenA, tokenB);
+            // Get pair address - try from factory first (more reliable)
+            let pairAddress: string;
+            try {
+              const factoryContract = getFactoryContract(provider);
+              pairAddress = await factoryContract.getPair(tokenA, tokenB);
+            } catch (err) {
+              // Fallback to router if factory method fails
+              pairAddress = await router.getPairAddress(tokenA, tokenB);
+            }
+            
             if (pairAddress === ethers.constants.AddressZero) {
               return null;
             }
         
             // Get LP token balance
-            const lpBalance = await router.balanceOf(pairAddress, userAddress);
+            let lpBalance: ethers.BigNumber;
+            try {
+              // Try both methods to get balance
+              const pairContract = getPairContract(pairAddress, provider);
+              lpBalance = await pairContract.balanceOf(userAddress);
+            } catch (err) {
+              lpBalance = await router.balanceOf(pairAddress, userAddress);
+            }
+            
             if (lpBalance.isZero()) {
               return null;
             }
@@ -528,6 +545,24 @@ export const getUserLiquidityPositions = async (
               getTokenInfo(tokenA),
               getTokenInfo(tokenB)
             ]);
+            
+            // Get token symbols as backup
+            let token0Symbol = tokenAInfo.symbol;
+            let token1Symbol = tokenBInfo.symbol;
+            
+            try {
+              // Try to get actual tokens from the pair
+              const pairContract = getPairContract(pairAddress, provider);
+              const token0 = await pairContract.token0();
+              const token1 = await pairContract.token1();
+              const token0Contract = getERC20Contract(token0, provider);
+              const token1Contract = getERC20Contract(token1, provider);
+              token0Symbol = await token0Contract.symbol();
+              token1Symbol = await token1Contract.symbol();
+            } catch (err: any) {
+              // Fallback to the original symbols if this fails
+              logger.warn(`Couldn't get token symbols from pair contract: ${err.message || 'Unknown error'}`);
+            }
             
             // Get reserves and total supply
             const [reserveA, reserveB] = await router.getReserves(pairAddress, tokenA, tokenB);
@@ -544,17 +579,23 @@ export const getUserLiquidityPositions = async (
             // Calculate token amounts based on share
             const tokenAAmount = reserveA.mul(lpBalance).div(totalSupply);
             const tokenBAmount = reserveB.mul(lpBalance).div(totalSupply);
+            
+            // Calculate estimated value in USD (placeholder - you'd need price feeds for real implementation)
+            const valueUSD = 0; // This would need to be calculated with price data
         
             return {
               tokenA,
               tokenB,
-              tokenASymbol: tokenAInfo.symbol,
-              tokenBSymbol: tokenBInfo.symbol,
+              tokenASymbol: token0Symbol || tokenAInfo.symbol,
+              tokenBSymbol: token1Symbol || tokenBInfo.symbol,
               tokenAAmount: ethers.utils.formatUnits(tokenAAmount, tokenAInfo.decimals),
               tokenBAmount: ethers.utils.formatUnits(tokenBAmount, tokenBInfo.decimals),
               lpBalance: ethers.utils.formatUnits(lpBalance, 18),
               poolShare: poolShare.toNumber() / 100,
-              pairAddress
+              pairAddress,
+              lpTokenAddress: pairAddress, // In most DEXes, the LP token address is the pair address
+              valueUSD: valueUSD.toString(),
+              createdAt: Math.floor(Date.now() / 1000)
             };
           } catch (error) {
             logger.error(`Error processing pair ${tokenA}-${tokenB}:`, error);
@@ -637,4 +678,47 @@ export const addLPTokenToWallet = async (
     logger.error("Error adding LP token to wallet:", error);
     return false;
   }
+};
+
+/**
+ * Helper function to get ERC20 contract instance
+ */
+export function getERC20Contract(tokenAddress: string, provider: ethers.providers.Provider) {
+  const abi = [
+    'function symbol() view returns (string)',
+    'function name() view returns (string)',
+    'function balanceOf(address) view returns (uint256)'
+  ];
+  return new ethers.Contract(tokenAddress, abi, provider);
+}
+
+// Add a temporary implementation for these functions if they don't exist elsewhere
+// These can be replaced once the actual implementations are found
+const getPairContract = (pairAddress: string, provider: ethers.providers.Provider): ethers.Contract => {
+  return new ethers.Contract(
+    pairAddress,
+    [
+      'function token0() external view returns (address)',
+      'function token1() external view returns (address)',
+      'function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)',
+      'function totalSupply() external view returns (uint256)',
+      'function balanceOf(address owner) external view returns (uint256)'
+    ],
+    provider
+  );
+};
+
+// Add FACTORY_ADDRESS to CONTRACTS if it doesn't exist
+// Using ROUTER_ADDRESS as a placeholder - in a real implementation, this would be the actual factory address
+const FACTORY_ADDRESS = CONTRACTS.ROUTER_ADDRESS; // placeholder
+
+const getFactoryContract = (provider: ethers.providers.Provider): ethers.Contract => {
+  return new ethers.Contract(
+    FACTORY_ADDRESS,
+    [
+      'function getPair(address tokenA, address tokenB) external view returns (address pair)',
+      'event PairCreated(address indexed token0, address indexed token1, address pair, uint)'
+    ],
+    provider
+  );
 }; 

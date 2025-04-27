@@ -2,15 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import Image from 'next/image';
-import { 
-  TOKENS, 
-  getTokenBalance, 
-  getSwapQuote, 
-  executeSwap, 
-  approveToken,
-  getPairReserves,
-  getRouterContract
-} from '@/utils/contracts';
+import { TOKENS } from '@/utils/contracts/addresses';
+import { getTokenBalance, approveToken } from '@/utils/contracts/erc20';
+import { getSwapQuote, executeSwap, getPairReserves, getRouterContract } from '@/utils/contracts/router';
 import { ethers } from 'ethers';
 import dynamic from 'next/dynamic';
 
@@ -66,14 +60,6 @@ interface SwapTranslationsType {
 
 // Updated token data - removed USDT, DAI and kept custom tokens
 const tokensData: TokensType = {
-  eth: {
-    name: 'Ethereum',
-    symbol: 'ETH',
-    logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg',
-    balance: '0',
-    decimals: 18,
-    address: TOKENS.ETH
-  },
   aih: {
     name: 'AIH Token',
     symbol: 'AIH',
@@ -126,12 +112,21 @@ const tokensData: TokensType = {
 
 // Exchange rates between tokens
 const exchangeRates: ExchangeRatesType = {
-  'eth_aih': 1000,
-  'eth_usdt': 1800,
-  'eth_dai': 1800,
-  'aih_usdt': 1.8,
-  'aih_dai': 1.8,
-  'usdt_dai': 1
+  'aih_td': 10,
+  'aih_fhbi': 10,
+  'aih_fhbi2': 10,
+  'aih_fhbi3': 10,
+  'aih_rtk': 10,
+  'td_fhbi': 1,
+  'td_fhbi2': 1,
+  'td_fhbi3': 1, 
+  'td_rtk': 1,
+  'fhbi_fhbi2': 1,
+  'fhbi_fhbi3': 1,
+  'fhbi_rtk': 1,
+  'fhbi2_fhbi3': 1,
+  'fhbi2_rtk': 1,
+  'fhbi3_rtk': 1
 };
 
 // Add notification types
@@ -139,8 +134,8 @@ type NotificationType = 'success' | 'error' | 'loading' | null;
 
 const SwapPage = () => {
   const [tokens, setTokens] = useState<TokensType>(tokensData);
-  const [fromToken, setFromToken] = useState<string>('eth');
-  const [toToken, setToToken] = useState<string>('aih');
+  const [fromToken, setFromToken] = useState<string>('aih');
+  const [toToken, setToToken] = useState<string>('td');
   const [fromAmount, setFromAmount] = useState<string>('');
   const [toAmount, setToAmount] = useState<string>('');
   const [currentSelector, setCurrentSelector] = useState<string | null>(null);
