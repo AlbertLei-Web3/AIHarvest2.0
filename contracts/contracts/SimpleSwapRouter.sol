@@ -135,7 +135,7 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
      * @param tokenB The second token address 第二个代币地址
      * @return pair The address of the pair (computed deterministically) 返回对地址（确定性计算）
      */
-    function createPair(address tokenA, address tokenB) public nonReentrant returns (address pair) {
+    function createPair(address tokenA, address tokenB) public returns (address pair) {
         require(tokenA != tokenB, "IDENTICAL_ADDRESSES");
         require(tokenA != address(0) && tokenB != address(0), "ZERO_ADDRESS");
         require(getPair[tokenA][tokenB] == address(0), "PAIR_EXISTS");
@@ -265,6 +265,7 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         // Get reserves 获取当前储备量
         (uint256 reserveA, uint256 reserveB) = getReserves(pair, tokenA, tokenB);
         
+        // Calculate amounts to be added
         if (reserveA == 0 && reserveB == 0) {
             // First time adding liquidity 第一次添加流动性
             amountA = amountADesired;
@@ -290,18 +291,39 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             }
         }
 
-        // INTERACTIONS: External calls (necessary before state changes to have tokens)
-        // Transfer tokens to the contract 转移代币到合约
+        // Pre-calculate liquidity amount before any external calls
+        uint256 lpCurrentSupply = IERC20(pairs[pair].lpToken).totalSupply();
+        if (lpCurrentSupply == 0) {
+            // Initial liquidity provision
+            uint256 initialLiquidity = sqrt(amountA * amountB);
+            require(initialLiquidity >= MINIMUM_LIQUIDITY, "INSUFFICIENT_INITIAL_LIQUIDITY");
+            liquidity = initialLiquidity - MINIMUM_LIQUIDITY;
+        } else {
+            // Calculate based on proportion of existing supply
+            uint256 liquidityA = (amountA * lpCurrentSupply) / reserveA;
+            uint256 liquidityB = (amountB * lpCurrentSupply) / reserveB;
+            liquidity = liquidityA < liquidityB ? liquidityA : liquidityB;
+        }
+        require(liquidity > 0, "INSUFFICIENT_LIQUIDITY_MINTED");
+
+        // INTERACTIONS: External calls to transfer tokens to the contract
         if (amountA > 0) IERC20(tokenA).safeTransferFrom(msg.sender, address(this), amountA);
         if (amountB > 0) IERC20(tokenB).safeTransferFrom(msg.sender, address(this), amountB);
 
-        // EFFECTS: State changes (updating reserves)
-        // Update reserves 更新储备量
+        // EFFECTS: Update reserves
         _updateReserves(pair, tokenA, tokenB, amountA, amountB, true);
-
-        // INTERACTIONS: External calls (after state changes)
-        // Mint LP tokens 铸造LP代币
-        liquidity = _mintLPTokens(pair, to, reserveA, reserveB, amountA, amountB);
+        
+        // INTERACTIONS: Mint LP tokens after all state changes
+        Pair storage pairData = pairs[pair];
+        address lpToken = pairData.lpToken;
+        
+        // If first liquidity provision, mint minimum liquidity to contract (locked)
+        if (lpCurrentSupply == 0) {
+            PairERC20(lpToken).mint(address(this), MINIMUM_LIQUIDITY);
+        }
+        
+        // Finally mint LP tokens to the user
+        PairERC20(lpToken).mint(to, liquidity);
         
         emit Mint(pair, amountA, amountB);
         return (amountA, amountB, liquidity);
@@ -681,6 +703,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         }
         
         require(liquidity > 0, "INSUFFICIENT_LIQUIDITY_MINTED");
+        
+        // Make sure the LP token mint happens after all calculations to prevent reentrancy issues
         PairERC20(lpToken).mint(to, liquidity);
         
         return liquidity;

@@ -7,7 +7,12 @@
     "compile": "hardhat compile",
     "test": "hardhat test",
     "deploy": "hardhat run scripts/deploy.js",
-    "deploy:testnet": "hardhat run scripts/deploy.js --network sepolia"
+    "deploy:testnet": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:sepolia": "npx hardhat run scripts/deploy-sepolia.js --network sepolia",
+    "prepare-env": "node scripts/prepare-env.js",
+    "deploy:sepolia:full": "hardhat compile && npm run deploy:sepolia",
+    "check-compile": "node scripts/check-compilation.js",
+    "save-deployment": "node scripts/save-deployment.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",

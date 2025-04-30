@@ -99,12 +99,11 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Add a new LP to the pool
-     * @param _allocPoint Allocation points for this pool
-     * @param _lpToken Address of the LP token contract
-     * @param _withUpdate Flag to call massUpdatePools
-     */
-    function add(uint256 _allocPoint, address _lpToken, bool _withUpdate) external onlyOwner {
+    * @dev Add a new LP to the pool
+    * @param _allocPoint Allocation points for this pool
+    * @param _lpToken Address of the LP token contract
+    */
+    function add(uint256 _allocPoint, address _lpToken) external onlyOwner {
         require(_lpToken != address(0), "LP token cannot be zero address");
         
         // Check for duplicate LP token
@@ -113,15 +112,16 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
             require(address(poolInfo[pid].lpToken) != _lpToken, "LP token already added");
         }
         
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        // 不再需要 _withUpdate 参数
+        // 我们总是更新所有池子，确保奖励计算正确
+        massUpdatePools();
         
         uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
         
-        // Update total allocation points - unchecked is safe with Solidity 0.8+ overflow protection
+        // Update total allocation points
         totalAllocPoint += _allocPoint;
         
+        // 添加新池子，无需检查LP代币的factory
         poolInfo.push(PoolInfo({
             lpToken: IERC20(_lpToken),
             allocPoint: _allocPoint,
@@ -132,23 +132,20 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         
         emit PoolAdded(poolInfo.length - 1, _lpToken, _allocPoint);
     }
-
     /**
-     * @dev Update the allocation points of a pool
-     * @param _pid Pool ID
-     * @param _allocPoint New allocation points
-     * @param _withUpdate Flag to call massUpdatePools
-     */
-    function set(uint256 _pid, uint256 _allocPoint, bool _withUpdate) external onlyOwner {
+    * @dev Update the allocation points of a pool
+    * @param _pid Pool ID
+    * @param _allocPoint New allocation points
+    */
+    function set(uint256 _pid, uint256 _allocPoint) external onlyOwner {
         require(_pid < poolInfo.length, "Pool does not exist");
         
-        if (_withUpdate) {
-            massUpdatePools();
-        }
+        // 总是更新所有池子
+        massUpdatePools();
         
         uint256 oldAllocPoint = poolInfo[_pid].allocPoint;
         
-        // Update allocation points - unchecked is safe with Solidity 0.8+ overflow protection
+        // Update allocation points
         totalAllocPoint = totalAllocPoint - oldAllocPoint + _allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
         
