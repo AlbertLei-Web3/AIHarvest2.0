@@ -65,6 +65,34 @@ export const getTokenInfo = async (tokenAddress: string): Promise<TokenInfo> => 
 };
 
 /**
+ * Get token name
+ * 获取代币名称
+ */
+export const getTokenName = async (tokenAddress: string): Promise<string> => {
+  try {
+    const tokenInfo = await getTokenInfo(tokenAddress);
+    return tokenInfo.name || "Unknown Token";
+  } catch (error) {
+    logger.error(`Failed to get token name for ${tokenAddress}:`, error);
+    return "Unknown Token";
+  }
+};
+
+/**
+ * Get token symbol
+ * 获取代币符号
+ */
+export const getTokenSymbol = async (tokenAddress: string): Promise<string> => {
+  try {
+    const tokenInfo = await getTokenInfo(tokenAddress);
+    return tokenInfo.symbol || "UNKNOWN";
+  } catch (error) {
+    logger.error(`Failed to get token symbol for ${tokenAddress}:`, error);
+    return "UNKNOWN";
+  }
+};
+
+/**
  * Get token balance with error handling and formatting
  */
 export const getTokenBalance = async (tokenAddress: string, accountAddress: string): Promise<string> => {

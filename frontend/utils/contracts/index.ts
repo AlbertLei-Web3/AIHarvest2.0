@@ -12,5 +12,5 @@ export * from './erc20';
 export * from './tokenUtils';
 export * from './router';
 export * from './liquidity';
-// export * from './farm'; - farm module has been removed
+export * from './farm';
 export * from './network'; 
