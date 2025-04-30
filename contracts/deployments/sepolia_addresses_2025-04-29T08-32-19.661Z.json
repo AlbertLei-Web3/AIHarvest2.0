@@ -1,0 +1,9 @@
+{
+  "AIHToken": "0xCdD664D1fa232Af5af9911371DaE550c52e249FE",
+  "SimpleSwapRouter": "0x2ee39982901fEE4DaDd9AAAe23D31FBf2136A590",
+  "SimpleFarm": "0xa8c0CD26828eFCb619C02d56f416e36CC144d087",
+  "network": "sepolia",
+  "chainId": 11155111,
+  "deploymentTime": "2025-04-29T08:32:19.660Z",
+  "deployer": "0x0d87d8E1def9cA4A5f1BE181dc37c9ed9622c8d5"
+}

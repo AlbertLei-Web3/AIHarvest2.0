@@ -9,6 +9,13 @@ import { CONTRACTS } from './addresses';
 import { LiquidityPosition } from './types';
 
 /**
+ * Helper function to truncate token symbol to specified length
+ */
+function truncateSymbol(symbol: string, maxLength: number): string {
+  return symbol.length > maxLength ? symbol.substring(0, maxLength) : symbol;
+}
+
+/**
  * Calculate LP token amount to receive with improved accuracy
  */
 export const calculateLPTokenAmount = async (
@@ -133,13 +140,15 @@ export const approveLPToken = async (
       } as any;
     }
     
-    // Get LP token address
+    // Get LP token address - IMPORTANT: This is the address of the ERC20 token, not the pair address
     const lpTokenAddress = await router.getLPToken(pairAddress);
+    logger.debug(`LP token address: ${lpTokenAddress}`);
+    
     if (lpTokenAddress === ethers.constants.AddressZero) {
       throw new Error("LP token address not found");
     }
     
-    // Approve LP token
+    // Approve LP token to be spent by the router
     const lpTokenContract = getTokenContract(lpTokenAddress, signer);
     
     // Check current allowance
@@ -150,7 +159,7 @@ export const approveLPToken = async (
     const amountToApprove = ethers.utils.parseUnits(amount, 18);
     logger.debug(`Amount to approve (in wei): ${amountToApprove.toString()}`);
     
-    // Send approval transaction
+    // Send approval transaction - IMPORTANT: Approve the router contract to spend LP tokens
     const tx = await lpTokenContract.approve(CONTRACTS.ROUTER_ADDRESS, amountToApprove);
     logger.log(`Approval transaction submitted with hash: ${tx.hash}`);
     return tx;
@@ -311,6 +320,14 @@ export const removeLiquidity = async (
     if (pairAddress === ethers.constants.AddressZero) {
       throw new Error("Pair does not exist");
     }
+    
+    // IMPORTANT: Get the correct LP token address, not the pair address
+    const lpTokenAddress = await router.getLPToken(pairAddress);
+    if (lpTokenAddress === ethers.constants.AddressZero) {
+      throw new Error("LP token not found for this pair");
+    }
+    
+    logger.debug(`LP token address: ${lpTokenAddress}`);
       
     // Handle direct removal for bypass mode
     if (bypassChecks) {
@@ -357,8 +374,7 @@ export const removeLiquidity = async (
     const amountAMin = amountA.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
     const amountBMin = amountB.mul(Math.floor((100 - slippageTolerance) * 100)).div(10000);
     
-    // Check LP token allowance
-    const lpTokenAddress = await router.getLPToken(pairAddress);
+    // Check LP token allowance - use the lpTokenAddress not the pair address
     const lpTokenContract = getTokenContract(lpTokenAddress, signer);
     const allowance = await lpTokenContract.allowance(signerAddress, CONTRACTS.ROUTER_ADDRESS);
       
@@ -466,12 +482,22 @@ export const getLPTokenBalance = async (
     const lpInfo = await getLPTokenInfo(tokenAAddress, tokenBAddress);
     
     if (!lpInfo.exists) {
+      logger.debug(`LP token doesn't exist for ${tokenAAddress}-${tokenBAddress}`);
       return "0";
     }
+    
+    logger.debug(`Getting LP token balance:
+      - LP Token Address: ${lpInfo.lpTokenAddress}
+      - Pair Address: ${lpInfo.pairAddress}
+      - Account: ${accountAddress}
+    `);
     
     // Get LP token balance
     const lpTokenContract = getTokenContract(lpInfo.lpTokenAddress);
     const balance = await lpTokenContract.balanceOf(accountAddress);
+    
+    logger.debug(`LP token balance: ${ethers.utils.formatUnits(balance, 18)} LP tokens`);
+    
     return ethers.utils.formatUnits(balance, 18);
   } catch (error) {
     logger.error("Error getting LP token balance:", error);
@@ -561,7 +587,7 @@ export const getUserLiquidityPositions = async (
               token1Symbol = await token1Contract.symbol();
             } catch (err: any) {
               // Fallback to the original symbols if this fails
-              logger.warn(`Couldn't get token symbols from pair contract: ${err.message || 'Unknown error'}`);
+              logger.warn(`Couldn't get token symbols from pair contract: ${err.message || 'Unknown error'}`, {});
             }
             
             // Get reserves and total supply
@@ -583,6 +609,9 @@ export const getUserLiquidityPositions = async (
             // Calculate estimated value in USD (placeholder - you'd need price feeds for real implementation)
             const valueUSD = 0; // This would need to be calculated with price data
         
+            // Get the actual LP token address from the router
+            const lpTokenAddress = await router.getLPToken(pairAddress);
+        
             return {
               tokenA,
               tokenB,
@@ -593,7 +622,7 @@ export const getUserLiquidityPositions = async (
               lpBalance: ethers.utils.formatUnits(lpBalance, 18),
               poolShare: poolShare.toNumber() / 100,
               pairAddress,
-              lpTokenAddress: pairAddress, // In most DEXes, the LP token address is the pair address
+              lpTokenAddress, // Using the correct LP token address from the router
               valueUSD: valueUSD.toString(),
               createdAt: Math.floor(Date.now() / 1000)
             };
@@ -628,10 +657,32 @@ export const addLPTokenToWallet = async (
       throw new Error("No crypto wallet found");
     }
     
+    logger.log(`Adding LP token for ${tokenAAddress}-${tokenBAddress} to wallet`);
+    
     const lpInfo = await getLPTokenInfo(tokenAAddress, tokenBAddress);
     
     if (!lpInfo.exists) {
       throw new Error("LP token doesn't exist");
+    }
+    
+    logger.debug(`LP token info:
+      - LP Token Address: ${lpInfo.lpTokenAddress}
+      - Pair Address: ${lpInfo.pairAddress}
+      - Total Supply: ${lpInfo.totalSupply}
+    `);
+    
+    // Verify the LP token address by checking if it's a contract
+    try {
+      const provider = getProvider();
+      const code = await provider.getCode(lpInfo.lpTokenAddress);
+      
+      if (code === '0x' || code === '') {
+        logger.error(`WARNING: LP token address ${lpInfo.lpTokenAddress} is not a contract`, {});
+      } else {
+        logger.debug(`LP token address ${lpInfo.lpTokenAddress} is a valid contract`);
+      }
+    } catch (e) {
+      logger.error("Error verifying LP token address:", e);
     }
     
     // Get token info for names and symbols
@@ -647,14 +698,47 @@ export const addLPTokenToWallet = async (
     try {
       lpTokenSymbol = await lpTokenContract.symbol();
       lpTokenName = await lpTokenContract.name();
+      logger.debug(`Retrieved LP token details: Name=${lpTokenName}, Symbol=${lpTokenSymbol}`);
     } catch (error) {
+      logger.warn("Could not retrieve LP token symbol/name:", error);
       // Fallback in case the LP token doesn't have symbol/name functions
-      lpTokenSymbol = `${tokenAInfo.symbol}-${tokenBInfo.symbol}-LP`;
+      // Truncate token symbols to ensure final LP symbol is max 11 chars
+      const symA = truncateSymbol(tokenAInfo.symbol, 4);
+      const symB = truncateSymbol(tokenBInfo.symbol, 4);
+      lpTokenSymbol = `${symA}-${symB}LP`;
       lpTokenName = `${tokenAInfo.symbol}-${tokenBInfo.symbol} LP Token`;
+      logger.debug(`Using fallback LP token details: Name=${lpTokenName}, Symbol=${lpTokenSymbol}`);
+    }
+    
+    // Ensure lpTokenSymbol is 11 chars or less for wallet compatibility
+    if (lpTokenSymbol && lpTokenSymbol.length > 11) {
+      logger.warn(`LP token symbol is too long (${lpTokenSymbol.length} chars). Truncating to 11 chars.`, {});
+      lpTokenSymbol = lpTokenSymbol.substring(0, 11);
+    }
+    
+    // Check user's LP token balance before adding to wallet
+    try {
+      const signer = getSigner();
+      const signerAddress = await signer.getAddress();
+      const balance = await lpTokenContract.balanceOf(signerAddress);
+      logger.debug(`Current LP token balance: ${ethers.utils.formatUnits(balance, 18)}`);
+      
+      if (balance.isZero()) {
+        logger.warn(`Warning: LP token balance is zero. You may not see anything in your wallet even after adding it.`, {});
+      }
+    } catch (e) {
+      logger.error("Error checking LP token balance:", e);
     }
     
     // Add token to wallet
     try {
+      logger.debug(`Adding token to wallet: 
+        Address: ${lpInfo.lpTokenAddress}
+        Symbol: ${lpTokenSymbol}
+        Decimals: 18
+        Name: ${lpTokenName}
+      `);
+      
       await window.ethereum.request({
         method: 'wallet_watchAsset',
         params: {
@@ -721,4 +805,114 @@ const getFactoryContract = (provider: ethers.providers.Provider): ethers.Contrac
     ],
     provider
   );
+};
+
+/**
+ * Check if LP tokens were minted by looking at Transfer events
+ */
+export const verifyLPTokenMint = async (
+  tokenAAddress: string,
+  tokenBAddress: string,
+  userAddress: string,
+  txHash: string
+): Promise<{
+  success: boolean,
+  amount: string,
+  lpTokenAddress: string
+}> => {
+  try {
+    logger.log(`Verifying LP token mint in transaction: ${txHash}`);
+    
+    // Get LP token address
+    const lpInfo = await getLPTokenInfo(tokenAAddress, tokenBAddress);
+    
+    if (!lpInfo.exists) {
+      logger.error("LP token doesn't exist", {});
+      return { success: false, amount: "0", lpTokenAddress: ethers.constants.AddressZero };
+    }
+    
+    const provider = getProvider();
+    const receipt = await provider.getTransactionReceipt(txHash);
+    
+    if (!receipt || receipt.status === 0) {
+      logger.error("Transaction failed or not found", {});
+      return { success: false, amount: "0", lpTokenAddress: lpInfo.lpTokenAddress };
+    }
+    
+    // Define Transfer event interface
+    const transferEvent = new ethers.utils.Interface([
+      "event Transfer(address indexed from, address indexed to, uint256 value)"
+    ]);
+    
+    let mintFound = false;
+    let mintAmount = "0";
+    
+    // Look through logs for Transfer event from address(0) to user
+    for (const log of receipt.logs) {
+      if (log.address.toLowerCase() === lpInfo.lpTokenAddress.toLowerCase()) {
+        try {
+          const parsedLog = transferEvent.parseLog(log);
+          
+          if (
+            parsedLog.name === "Transfer" && 
+            parsedLog.args.from === ethers.constants.AddressZero &&
+            parsedLog.args.to.toLowerCase() === userAddress.toLowerCase()
+          ) {
+            mintFound = true;
+            mintAmount = ethers.utils.formatUnits(parsedLog.args.value, 18);
+            logger.log(`Found LP token mint event: ${mintAmount} tokens to ${userAddress}`, {});
+            break;
+          }
+        } catch (e) {
+          // Not a Transfer event or couldn't parse, continue
+        }
+      }
+    }
+    
+    // Check for Transfer event to the user from non-zero address (in case it's not direct mint)
+    if (!mintFound) {
+      for (const log of receipt.logs) {
+        if (log.address.toLowerCase() === lpInfo.lpTokenAddress.toLowerCase()) {
+          try {
+            const parsedLog = transferEvent.parseLog(log);
+            
+            if (
+              parsedLog.name === "Transfer" && 
+              parsedLog.args.from !== ethers.constants.AddressZero &&
+              parsedLog.args.to.toLowerCase() === userAddress.toLowerCase()
+            ) {
+              mintFound = true;
+              mintAmount = ethers.utils.formatUnits(parsedLog.args.value, 18);
+              logger.log(`Found LP token transfer event: ${mintAmount} tokens from ${parsedLog.args.from} to ${userAddress}`, {});
+              break;
+            }
+          } catch (e) {
+            // Not a Transfer event or couldn't parse, continue
+          }
+        }
+      }
+    }
+    
+    if (mintFound) {
+      return { 
+        success: true, 
+        amount: mintAmount, 
+        lpTokenAddress: lpInfo.lpTokenAddress 
+      };
+    } else {
+      logger.error("No LP token transfer to user found in transaction logs", {});
+      return { 
+        success: false, 
+        amount: "0", 
+        lpTokenAddress: lpInfo.lpTokenAddress 
+      };
+    }
+  } catch (error) {
+    logger.error("Error verifying LP token mint:", error);
+    return { 
+      success: false, 
+      amount: "0", 
+      lpTokenAddress: ethers.constants.AddressZero 
+    };
+  }
 }; 

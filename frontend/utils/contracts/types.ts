@@ -49,25 +49,4 @@ export interface LiquidityPosition {
   pairAddress: string;
 }
 
-// Farming pool information interface
-export interface PoolInfo {
-  pid: number;
-  lpToken: string;
-  allocPoint: number;
-  lastRewardTime: number;
-  accAIHPerShare: string;
-  totalStaked: string;
-  tokenA?: string;
-  tokenB?: string;
-  tokenASymbol?: string;
-  tokenBSymbol?: string;
-}
-
-// User farming position interface
-export interface UserPoolInfo {
-  pid: number;
-  amount: string;
-  rewardDebt: string;
-  pendingRewards: string;
-  poolInfo?: PoolInfo;
-} 
+// Farm-related interfaces have been removed 

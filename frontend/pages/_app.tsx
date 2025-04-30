@@ -1,7 +1,7 @@
 import '@/styles/globals.css';
 import type { AppProps } from 'next/app';
 import { Layout } from '@/components/layout/Layout';
-import { createConfig, WagmiConfig } from 'wagmi';
+import { createConfig, WagmiConfig, type Config } from 'wagmi';
 import { sepolia } from 'wagmi/chains';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { http } from 'viem';
@@ -11,8 +11,8 @@ import { LiquidityProvider } from '@/contexts/LiquidityContext';
 
 console.log('Creating Wagmi config...'); // 添加调试日志
 
-// Create wagmi config for v2
-const config = createConfig({
+// Create our minimal config to avoid loading unused connectors
+const customConfig = createConfig({
   chains: [sepolia],
   transports: {
     [sepolia.id]: http()
@@ -36,7 +36,7 @@ function App({ Component, pageProps }: AppProps) {
   }
 
   return (
-    <WagmiConfig config={config}>
+    <WagmiConfig config={customConfig}>
       <QueryClientProvider client={queryClient}>
         <LiquidityProvider>
           <Layout>

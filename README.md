@@ -7,20 +7,20 @@ A decentralized platform for token swapping, liquidity provision, and yield farm
 ### Smart Contracts
 - ✅ AIHToken - ERC20 token implementation
 - ✅ SimpleSwapRouter - DEX router for swapping tokens and managing liquidity pools
-- ✅ SimpleFarm - Farming contract for staking LP tokens to earn rewards
+- ❌ SimpleFarm - Farming contract has been removed
 
 ### Frontend Integration
 - ✅ Contract ABIs defined and structured
 - ✅ Contract interaction hooks implemented
   - useAIHToken - Interact with the AIH token contract
   - useSimpleSwap - Interact with the swap router
-  - useSimpleFarm - Interact with the farming contract
+  - ❌ useSimpleFarm - Removed
 - ✅ Swap interface connected to contracts
 - ✅ Liquidity interface connected to contracts
   - Add/remove liquidity functionality
   - Liquidity position management
   - Pair address verification
-- ⏳ Farm interface connected to contracts
+- ❌ Farm interface removed
 
 ## Contract Integration
 
@@ -36,10 +36,7 @@ The frontend integrates with smart contracts through custom React hooks that uti
 // In a component
 const { balance, approve, transfer } = useAIHToken();
 const { swap, addLiquidity, removeLiquidity } = useSimpleSwap();
-const { deposit, withdraw, harvest } = useSimpleFarm(poolId);
-
-// Execute a swap
-await swap(amountIn, amountOutMin, path);
+// Farm functionality has been removed
 ```
 
 ## Development
@@ -71,13 +68,12 @@ The project follows a layered architecture:
 
 ## Core Smart Contracts
 
-We have implemented the three core smart contracts as specified in the project foundation document:
+We have implemented the following core smart contracts:
 
 1. **AIHToken**: ERC20 token with minting, burning, and vesting capabilities
    - Community allocation for token distribution
    - Team tokens with vesting
    - Ecosystem fund with vesting
-   - Farm allocation for rewards
 
 2. **SimpleSwapRouter**: DEX router for token swapping and liquidity provision
    - Create token pairs with deterministic addresses
@@ -86,11 +82,7 @@ We have implemented the three core smart contracts as specified in the project f
    - AMM based on constant product formula (x*y=k)
    - Protocol fee collection (1/6 of fees)
 
-3. **SimpleFarm**: LP token staking with AIH token rewards
-   - Multiple pools for different LP tokens
-   - Flexible reward allocation
-   - Time-based reward distribution (0.1 AIH per second default)
-   - Emergency withdrawal option
+// SimpleFarm contract has been removed from the frontend
 
 ## Pair Creation Mechanism
 
@@ -237,3 +229,46 @@ These diagrams help developers understand the system architecture and aid in fur
 ## License
 
 MIT 
+
+```mermaid
+flowchart TD
+    subgraph Contracts
+        AIHToken[AIHToken]
+        Router[SimpleSwapRouter]
+    end
+    
+    subgraph APIs
+        TokenAPI[Token API]
+        SwapAPI[Swap API]
+        LiquidityAPI[Liquidity API]
+    end
+    
+    subgraph Hooks
+        useTokens[useTokens]
+        useSwap[useSwap]
+        useLiquidity[useLiquidity]
+        useWeb3[useWeb3]
+    end
+    
+    subgraph Pages
+        Swap[Swap Page]
+        Liquidity[Liquidity Page]
+    end
+    
+    AIHToken --> TokenAPI
+    Router --> SwapAPI
+    Router --> LiquidityAPI
+    
+    TokenAPI --> useTokens
+    SwapAPI --> useSwap
+    LiquidityAPI --> useLiquidity
+    
+    useTokens --> Swap
+    useTokens --> Liquidity
+    useSwap --> Swap
+    useLiquidity --> Liquidity
+    useWeb3 --> Swap
+    useWeb3 --> Liquidity
+```
+
+After removing farm functionality, the application now focuses solely on token swapping and liquidity provision. 

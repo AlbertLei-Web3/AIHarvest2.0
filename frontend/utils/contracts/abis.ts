@@ -30,19 +30,7 @@ export const IERC20ABI = [
   "function transferFrom(address from, address to, uint256 amount) returns (bool)"
 ];
 
-// SimpleFarm ABI
-export const SimpleFarmABI = [
-  "function poolLength() view returns (uint256)",
-  "function poolInfo(uint256) view returns (address lpToken, uint256 allocPoint, uint256 lastRewardTime, uint256 accAIHPerShare, uint256 totalStaked)",
-  "function userInfo(uint256, address) view returns (uint256 amount, uint256 rewardDebt, uint256 pendingRewards)",
-  "function pendingAIH(uint256 _pid, address _user) view returns (uint256)",
-  "function deposit(uint256 _pid, uint256 _amount)",
-  "function withdraw(uint256 _pid, uint256 _amount)",
-  "function harvest(uint256 _pid)",
-  "function emergencyWithdraw(uint256 _pid)",
-  "function getPoolInfo(uint256 _pid) view returns (address lpToken, uint256 allocPoint, uint256 lastRewardTime, uint256 accAIHPerShare, uint256 totalStaked)",
-  "function getUserInfo(uint256 _pid, address _user) view returns (uint256 amount, uint256 rewardDebt, uint256 pendingRewards)"
-];
+// Farm contract ABI has been removed
 
 // AIH Token ABI
 export const AIHTokenABI = [

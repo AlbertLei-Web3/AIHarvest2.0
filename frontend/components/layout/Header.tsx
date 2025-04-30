@@ -4,7 +4,7 @@ import { useRouter } from 'next/router';
 import WalletConnect from '../wallet/WalletConnect';
 import { useAccount } from 'wagmi';
 
-// Create language context
+// Create language context 创建语言上下文
 interface LanguageContextType {
   language: 'en' | 'zh';
   setLanguage: (lang: 'en' | 'zh') => void;
@@ -21,7 +21,7 @@ export const LanguageContext = createContext<LanguageContextType>(defaultContext
 
 export const useLanguage = () => useContext(LanguageContext);
 
-// Translations
+// Translations 翻译
 const translations = {
   en: {
     home: 'Home',
@@ -63,17 +63,17 @@ export const Header: React.FC = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { language, setLanguage, t } = useLanguage();
 
-  // Handle client-side rendering to prevent hydration mismatch
+  // Handle client-side rendering to prevent hydration mismatch 处理客户端渲染以防止水合不匹配
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Helper function to determine if a link is active
+  // Helper function to determine if a link is active 辅助函数确定链接是否处于活动状态
   const isActive = (path: string) => {
     return router.pathname === path;
   };
 
-  // Define navigation links that will be shown conditionally after mounting
+  // Define navigation links that will be shown conditionally after mounting 定义在挂载后显示的条件导航链接
   const navigationLinks = [
     { href: '/swap', label: 'swap' },
     { href: '/liquidity', label: 'liquidity' },

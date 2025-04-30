@@ -9,7 +9,8 @@ import {
   removeLiquidity,
   approveLPToken, 
   getUserLiquidityPositions,
-  addLPTokenToWallet 
+  addLPTokenToWallet,
+  verifyLPTokenMint
 } from '@/utils/contracts/liquidity';
 import { getTokenBalance, approveToken, getTokenContract } from '@/utils/contracts/erc20';
 import { getRouterContract, getPairReserves, createTokenPair } from '@/utils/contracts/router';
@@ -43,6 +44,7 @@ interface LiquidityPosition {
   lpBalance: string;
   poolShare: number;
   pairAddress: string;
+  lpTokenAddress: string; // Make it required, not optional
 }
 
 interface LiquidityTranslation {
@@ -87,8 +89,6 @@ interface LiquidityTranslation {
   copy: string;
   lpTokenBalance: string;
   addToWallet: string;
-  stakeInFarm: string;
-  goToFarm: string;
 }
 
 interface LiquidityTranslationsType {
@@ -247,8 +247,6 @@ const LiquidityPage = () => {
       copy: 'Copy',
       lpTokenBalance: 'LP Token Balance',
       addToWallet: 'Add to Wallet',
-      stakeInFarm: 'Stake LP Tokens in Farm',
-      goToFarm: 'Go to Farm'
     },
     zh: {
       addLiquidity: '添加流动性',
@@ -292,8 +290,6 @@ const LiquidityPage = () => {
       copy: '复制',
       lpTokenBalance: 'LP代币余额',
       addToWallet: '添加到钱包',
-      stakeInFarm: '在农场质押LP代币',
-      goToFarm: '前往农场'
     }
   };
   
@@ -1058,6 +1054,31 @@ const LiquidityPage = () => {
       // Immediately refresh positions
       await refreshPositions();
       
+      // Get LP token mint verification
+      try {
+        const verificationResult = await verifyLPTokenMint(
+          tokens[tokenA].address,
+          tokens[tokenB].address,
+          address,
+          addLiquidityTx.hash
+        );
+        
+        if (verificationResult.success) {
+          console.log(`LP tokens minted successfully! Amount: ${verificationResult.amount}`);
+          showSuccess(`LP tokens received: ${verificationResult.amount}`);
+          
+          // Automatically add LP token to wallet
+          try {
+            await addLPTokenToWallet(tokens[tokenA].address, tokens[tokenB].address);
+          } catch (walletAddError) {
+            console.error("Could not add LP token to wallet:", walletAddError);
+          }
+        } else {
+          console.warn("LP token minting verification failed. Check your wallet for LP tokens.");
+        }
+      } catch (verificationError) {
+        console.error("Error verifying LP token mint:", verificationError);
+      }
     } catch (error) {
       console.error('Error during adding liquidity:', error);
       hideLoading();
@@ -1228,12 +1249,21 @@ const LiquidityPage = () => {
         }
         
         // Get router contract and explicitly connect it to signer
-        const routerContract = getRouterContract().connect(signer);
+        const routerContract = getRouterContract(signer);
         
-        // Get LP token contract
-        const lpTokenAddress = position.pairAddress;
+        // IMPORTANT: Get the correct LP token address from the router
+        // We need to get the LP token address associated with the pair, not use the pair address itself
+        const pairAddress = await routerContract.getPairAddress(position.tokenA, position.tokenB);
+        const lpTokenAddress = await routerContract.getLPToken(pairAddress);
+        
+        console.log(`Pair address: ${pairAddress}`);
+        console.log(`LP token address: ${lpTokenAddress}`);
+        
+        if (!lpTokenAddress || lpTokenAddress === ethers.constants.AddressZero) {
+          throw new Error("Could not find LP token address for this pair");
+        }
+        
         const lpTokenContract = getTokenContract(lpTokenAddress).connect(signer);
-        
         const lpAmount = ethers.utils.parseUnits(position.lpBalance);
         
         // First approve LP token with timeout
@@ -1242,7 +1272,7 @@ const LiquidityPage = () => {
         const gasPrice = await provider.getGasPrice();
         
         const approvalTx = await lpTokenContract.approve(
-          routerContract.address,
+          routerContract.address, // IMPORTANT: Approve the router contract, not the LP token
           lpAmount,
           {
             gasLimit: 300000,
@@ -1268,12 +1298,9 @@ const LiquidityPage = () => {
         const amountAMin = ethers.utils.parseUnits(position.tokenAAmount).mul(Math.floor(slippageFactor * 1000)).div(1000);
         const amountBMin = ethers.utils.parseUnits(position.tokenBAmount).mul(Math.floor(slippageFactor * 1000)).div(1000);
         
-        // Get deadline
-        const deadline = Math.floor(Date.now() / 1000) + 20 * 60; // 20 minutes
-        
         showLoading(`Removing liquidity...`);
         
-        // Use Direct Remove with timeout
+        // Remove deadline parameter which was incorrectly included
         const removeTx = await routerContract.removeLiquidity(
           position.tokenA,
           position.tokenB,
@@ -1281,7 +1308,6 @@ const LiquidityPage = () => {
           amountAMin,
           amountBMin,
           address,
-          deadline,
           {
             gasLimit: 600000,
             gasPrice
@@ -1314,6 +1340,8 @@ const LiquidityPage = () => {
           errorMessage = 'Contract is already processing a transaction. Please wait a few minutes and try again.';
         } else if (error.message.includes('requires a signer')) {
           errorMessage = 'Wallet connection issue. Please try resetting your wallet connection using the Force Reset button.';
+        } else if (error.message.includes('to non-contract address')) {
+          errorMessage = 'The operation is trying to interact with a non-contract address. Please reset your connection and try again.';
         }
         
         showError(`${lt('removeLiquidityError')}: ${errorMessage}`);
@@ -1614,21 +1642,71 @@ const LiquidityPage = () => {
 
   // Add handleAddLPTokenToWallet function
   const handleAddLPTokenToWallet = async (position: LiquidityPosition): Promise<void> => {
+    if (!address) {
+      showError(lt('pleaseConnectWallet'));
+      return;
+    }
+    
     try {
-      showLoading(`Adding ${position.tokenASymbol}-${position.tokenBSymbol} LP token to wallet...`);
+      showLoading('Adding LP token to wallet...');
       
+      // Get the LP token address and verify it's a contract
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      
+      // Check if position has a valid LP token address
+      let lpTokenAddressToUse = position.lpTokenAddress;
+      
+      if (!lpTokenAddressToUse || lpTokenAddressToUse === ethers.constants.AddressZero) {
+        console.log("Position doesn't have valid LP token address, getting it from router");
+        const router = getRouterContract();
+        const pairAddress = await router.getPairAddress(position.tokenA, position.tokenB);
+        
+        if (pairAddress === ethers.constants.AddressZero) {
+          throw new Error("Pair doesn't exist");
+        }
+        
+        // Get the LP token address
+        const lpTokenAddress = await router.getLPToken(pairAddress);
+        if (lpTokenAddress === ethers.constants.AddressZero) {
+          throw new Error("LP token address not found");
+        }
+        
+        // Use this address instead
+        lpTokenAddressToUse = lpTokenAddress;
+        console.log(`Using LP token address from router: ${lpTokenAddressToUse}`);
+      }
+      
+      // Verify it's a contract
+      const code = await provider.getCode(lpTokenAddressToUse);
+      if (code === '0x' || code === '') {
+        console.error("LP token address is not a contract:", lpTokenAddressToUse);
+        throw new Error("LP token address is not a contract");
+      }
+      
+      // Check balance
+      const lpTokenContract = new ethers.Contract(
+        lpTokenAddressToUse,
+        ["function balanceOf(address) view returns (uint256)", "function decimals() view returns (uint8)"],
+        provider
+      );
+      
+      const balance = await lpTokenContract.balanceOf(address);
+      const decimals = await lpTokenContract.decimals().catch(() => 18); // Default to 18 if fails
+      console.log(`LP token balance: ${ethers.utils.formatUnits(balance, decimals)}`);
+      
+      // Add the token to wallet
       const success = await addLPTokenToWallet(position.tokenA, position.tokenB);
       
       if (success) {
         hideLoading();
-        showSuccess(`${position.tokenASymbol}-${position.tokenBSymbol} LP token added to wallet`);
+        showSuccess(`${lt('lpTokenBalance')}: ${ethers.utils.formatUnits(balance, decimals)}`);
       } else {
-        hideLoading();
-        showError('Failed to add LP token to wallet');
+        throw new Error("Failed to add LP token to wallet");
       }
     } catch (error: any) {
       hideLoading();
-      showError(`Error adding LP token to wallet: ${error.message || 'Unknown error'}`);
+      console.error("Error adding LP token to wallet:", error);
+      showError(`Error: ${error.message || "Unknown error"}`);
     }
   };
 
@@ -1709,18 +1787,15 @@ const LiquidityPage = () => {
         
         for (const [key, token] of Object.entries(tokens)) {
           try {
-            if (address) {
-              // Skip ETH token as it's not a contract
-              if (token.address === TOKENS.ETH) {
-                continue;
-              }
-              
-              // Check if token address is a valid contract
-              if (token.address && token.address !== ethers.constants.AddressZero) {
-                const balance = await getTokenBalance(token.address, address);
-                updatedTokens[key] = { ...token, balance };
-                console.log(`Updated ${token.symbol} balance: ${balance}`);
-              }
+            if (!token.address || token.address === ethers.constants.AddressZero) {
+              continue;
+            }
+            
+            // Check if token address is a valid contract
+            if (token.address && token.address !== ethers.constants.AddressZero) {
+              const balance = await getTokenBalance(token.address, address);
+              updatedTokens[key] = { ...token, balance };
+              console.log(`Updated ${token.symbol} balance: ${balance}`);
             }
           } catch (error) {
             console.error(`Error updating ${token.symbol} balance:`, error);
@@ -1767,52 +1842,6 @@ const LiquidityPage = () => {
     amount: string;
   } | null>(null);
   const router = useRouter();
-  
-  // Add a new function to redirect to the Farm page
-  const redirectToFarm = () => {
-    if (!stakingInfo) return;
-    
-    // Redirect to the farm page with LP token information
-    router.push({
-      pathname: '/farm',
-      query: {
-        lpToken: stakingInfo.lpToken,
-        tokenA: stakingInfo.tokenA,
-        tokenB: stakingInfo.tokenB,
-        amount: stakingInfo.amount
-      }
-    });
-  };
-  
-  // Create a notification component for staking option
-  const StakingOptionNotification = () => {
-    if (!showStakingOption || !stakingInfo) return null;
-    
-    return (
-      <div className="fixed bottom-6 right-6 bg-green-900 p-4 rounded-lg shadow-lg border border-green-700 max-w-md z-50">
-        <div className="flex flex-col">
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-white font-bold">{lt('liquidityAdded')}</h3>
-            <button 
-              onClick={() => setShowStakingOption(false)} 
-              className="text-gray-300 hover:text-white"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
-            </button>
-          </div>
-          <p className="text-green-200 mb-3">{lt('stakeInFarm')}</p>
-          <button 
-            onClick={redirectToFarm}
-            className="w-full bg-green-700 hover:bg-green-600 text-white py-2 px-4 rounded-md transition-colors"
-          >
-            {lt('goToFarm')}
-          </button>
-        </div>
-      </div>
-    );
-  };
   
   // Add the notification component to the return section
   return (
@@ -2288,7 +2317,6 @@ const LiquidityPage = () => {
           </div>
         </div>
       )}
-      <StakingOptionNotification />
     </div>
   );
 };

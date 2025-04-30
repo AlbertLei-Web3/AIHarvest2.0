@@ -156,20 +156,23 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         string memory symbol0;
         string memory symbol1;
         try IERC20Metadata(token0).symbol() returns (string memory s) {
-            symbol0 = s;
+            // Limit symbol0 to 4 characters max to ensure final symbol fits in 11 chars
+            symbol0 = _truncateSymbol(s, 4);
         } catch {
             symbol0 = "TKN";
         }
         
         try IERC20Metadata(token1).symbol() returns (string memory s) {
-            symbol1 = s;
+            // Limit symbol1 to 4 characters max to ensure final symbol fits in 11 chars
+            symbol1 = _truncateSymbol(s, 4);
         } catch {
             symbol1 = "TKN";
         }
         
         // Create token names 创建代币名称
         string memory pairName = string(abi.encodePacked(symbol0, "-", symbol1, " LP Token"));
-        string memory pairSymbol = string(abi.encodePacked(symbol0, "-", symbol1, "-LP"));
+        // Ensure LP symbol is 11 chars or less: MAX 4 chars + "-" + MAX 4 chars + "-LP" = 11 chars
+        string memory pairSymbol = string(abi.encodePacked(symbol0, "-", symbol1, "LP"));
         
         // Create LP token 创建LP代币
         PairERC20 lpToken = new PairERC20(token0, token1, address(this), pairName, pairSymbol);
@@ -809,6 +812,19 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
                 pendingProtocolFees[token] = 0;
                 _safeTransferTokens(token, feeCollector, fee);
             }
+        }
+    }
+
+    // 添加一个新的辅助函数，用于截断代币符号以确保最终符号适合在11个字符或更少的LP符号格式中
+    function _truncateSymbol(string memory symbol, uint256 maxLength) internal pure returns (string memory truncatedSymbol) {
+        if (bytes(symbol).length > maxLength) {
+            bytes memory truncatedBytes = new bytes(maxLength);
+            for (uint256 i = 0; i < maxLength; i++) {
+                truncatedBytes[i] = bytes(symbol)[i];
+            }
+            truncatedSymbol = string(truncatedBytes);
+        } else {
+            truncatedSymbol = symbol;
         }
     }
 } 
