@@ -1534,8 +1534,18 @@ const LiquidityPage = () => {
     showNotificationMessage('success', message);
   };
 
+  // Show loading notification
   const showLoading = (message: string) => {
-    setLoading(true); // 保留原有状态以便与其他代码兼容
+    // Check if message contains a transaction hash and truncate it
+    if (message.includes('Transaction submitted:')) {
+      const parts = message.split('Transaction submitted:');
+      const prefix = parts[0] + 'Transaction submitted: ';
+      const hash = parts[1].trim();
+      // Truncate the hash if it's longer than 14 characters
+      const truncatedHash = hash.length > 14 ? `${hash.substring(0, 10)}...` : hash;
+      message = prefix + truncatedHash;
+    }
+    
     showNotificationMessage('loading', message, 0); // 持续时间为0表示不自动关闭
   };
 
@@ -1886,7 +1896,7 @@ const LiquidityPage = () => {
                    notificationType === 'error' ? lt('error') : 
                    lt('processing')}
                 </p>
-                <p className={`mt-1 text-sm ${
+                <p className={`mt-1 text-sm break-all break-words ${
                   notificationType === 'success' ? 'text-green-300' : 
                   notificationType === 'error' ? 'text-red-300' : 
                   'text-blue-300'

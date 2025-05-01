@@ -743,12 +743,16 @@ const SwapPage = () => {
               onClick={handleSwapDirection}
               aria-label="Swap direction"
             >
-              <div className="bg-gradient-to-r from-primary to-secondary rounded-full sm:w-10 sm:h-10 w-8 h-8 flex items-center justify-center">
-                {/* 更清晰、精致的箭头图标 / Cleaner, more polished arrow icon */}
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 10l5 5 5-5" />
-                  <path d="M7 14l5-5 5 5" />
-                </svg>
+              <div className="bg-gradient-to-r from-primary to-secondary rounded-full sm:w-10 sm:h-10 w-8 h-8 flex items-center justify-center overflow-hidden relative">
+                {/* 上下交换箭头 - 添加动画效果 / Up-down swap arrows with animation */}
+                <div className="flex flex-col items-center transform hover:translate-y-1 transition-transform">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-white animate-bounce-slow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                  </svg>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5 text-white mt-1 animate-bounce-slow-reverse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </div>
               </div>
             </button>
           </div>
