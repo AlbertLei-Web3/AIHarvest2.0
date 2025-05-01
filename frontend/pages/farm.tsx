@@ -1149,6 +1149,43 @@ const FarmPage = () => {
     }
   };
   
+  // Refresh rewards for a specific pool immediately
+  // 立即刷新特定池子的奖励
+  const refreshPoolRewards = async (poolId: number) => {
+    if (!address) return;
+    
+    setIsLoadingRewards(true);
+    
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      
+      // Get the latest pending rewards for this pool
+      const latestRewards = await getPendingRewards(provider, poolId, address);
+      console.log(`Updated rewards for pool ${poolId}: ${latestRewards}`);
+      
+      // Update the farmPools state with new rewards
+      const updatedPools = farmPools.map(pool => 
+        pool.pid === poolId ? {...pool, pendingRewards: latestRewards} : pool
+      );
+      setFarmPools(updatedPools);
+      
+      // Also update userFarmPositions if this pool is in user positions
+      const userPoolIndex = userFarmPositions.findIndex(p => p.pid === poolId);
+      if (userPoolIndex >= 0) {
+        const updatedPositions = [...userFarmPositions];
+        updatedPositions[userPoolIndex] = {
+          ...updatedPositions[userPoolIndex],
+          pendingRewards: latestRewards
+        };
+        setUserFarmPositions(updatedPositions);
+      }
+    } catch (error) {
+      console.error(`Error refreshing rewards for pool ${poolId}:`, error);
+    } finally {
+      setIsLoadingRewards(false);
+    }
+  };
+  
   // Refresh APR values for all pools
   // 刷新所有池子的APR值
   const refreshPoolAPRs = async () => {
@@ -1374,7 +1411,7 @@ const FarmPage = () => {
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
+            className="bg-white text-black border border-gray-700 rounded px-2 py-1 text-sm"
           >
             <option value="apr">APR</option>
             <option value="totalStaked">Total Staked</option>
@@ -1395,19 +1432,11 @@ const FarmPage = () => {
           <select
             value={filterOption}
             onChange={(e) => setFilterOption(e.target.value as FilterOption)}
-            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
+            className="bg-white text-black border border-gray-700 rounded px-2 py-1 text-sm"
           >
             <option value="all">All Pools</option>
             <option value="stakedOnly">Staked Only</option>
           </select>
-          
-          <button
-            onClick={refreshRewards}
-            disabled={isLoadingRewards}
-            className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-1 text-sm font-semibold transition-all"
-          >
-            {isLoadingRewards ? 'Refreshing...' : 'Refresh Rewards'}
-          </button>
         </div>
       </div>
       
@@ -1499,7 +1528,17 @@ const FarmPage = () => {
                             <span className="text-secondary">Loading...</span>
                           </div>
                         ) : (
-                          <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                          <div className="flex items-center">
+                            <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                            {/* Refresh Rewards Button moved inline with small gap */}
+                            <button
+                              onClick={() => refreshPoolRewards(pool.pid)}
+                              disabled={isLoadingRewards}
+                              className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-0.5 text-xs font-semibold transition-all ml-2"
+                            >
+                              {isLoadingRewards ? '...' : 'Refresh'}
+                            </button>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -1517,7 +1556,7 @@ const FarmPage = () => {
                     {parseFloat(pool.userStaked) > 0 && (
                       <>
                         <button 
-                          className="bg-dark-default hover:bg-dark-light text-white border border-gray-700 px-4 py-2 rounded-md transition-colors"
+                          className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                           onClick={() => openWithdrawModal(pool)}
                           disabled={!isConnected || isWithdrawing}
                         >
@@ -1595,7 +1634,17 @@ const FarmPage = () => {
                           <span className="text-secondary">Loading...</span>
                         </div>
                       ) : (
-                        <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                        <div className="flex items-center">
+                          <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                          {/* Refresh Rewards Button moved inline with small gap */}
+                          <button
+                            onClick={() => refreshPoolRewards(pool.pid)}
+                            disabled={isLoadingRewards}
+                            className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-0.5 text-xs font-semibold transition-all ml-2"
+                          >
+                            {isLoadingRewards ? '...' : 'Refresh'}
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1609,7 +1658,7 @@ const FarmPage = () => {
                     </button>
                     
                     <button 
-                      className="bg-dark-default hover:bg-dark-light text-white border border-gray-700 px-4 py-2 rounded-md transition-colors"
+                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                       onClick={() => openWithdrawModal(pool)}
                       disabled={isWithdrawing}
                     >
@@ -1641,13 +1690,13 @@ const FarmPage = () => {
             <div className="mb-4">
               <p className="text-sm text-gray-400 mb-1">{ft('walletBalance')}: {parseFloat(selectedPool.userBalance).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden bg-dark-default focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
                 <input
                   type="number"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-dark-default text-white placeholder-gray-500"
+                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
                 />
                 <button
                   className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
@@ -1700,13 +1749,13 @@ const FarmPage = () => {
             <div className="mb-4">
               <p className="text-sm text-gray-400 mb-1">{ft('stakedAmount')}: {parseFloat(selectedPool.userStaked).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden bg-dark-default focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
                 <input
                   type="number"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-dark-default text-white placeholder-gray-500"
+                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
                 />
                 <button
                   className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
