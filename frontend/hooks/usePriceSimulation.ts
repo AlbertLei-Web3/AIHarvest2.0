@@ -13,6 +13,7 @@ import {
 export function usePriceSimulation(onPriceUpdate?: (prices: Record<TokenSymbol, number>) => void) {
   const [simulationId, setSimulationId] = useState<NodeJS.Timeout | null>(null);
   const [prices, setPrices] = useState<Record<TokenSymbol, number>>(getAllTokenPrices());
+  const [prevPrices, setPrevPrices] = useState<Record<TokenSymbol, number>>(getAllTokenPrices());
   const [isActive, setIsActive] = useState(false);
 
   // Start the simulation
@@ -38,6 +39,9 @@ export function usePriceSimulation(onPriceUpdate?: (prices: Record<TokenSymbol, 
   useEffect(() => {
     const handlePriceUpdate = (event: CustomEvent) => {
       const newPrices = event.detail.prices;
+      
+      // Store current prices as previous before updating
+      setPrevPrices(prices);
       setPrices(newPrices);
       
       if (onPriceUpdate) {
@@ -57,10 +61,11 @@ export function usePriceSimulation(onPriceUpdate?: (prices: Record<TokenSymbol, 
       window.removeEventListener('priceUpdate', handlePriceUpdate as EventListener);
       stop();
     };
-  }, [onPriceUpdate, isActive, simulationId]);
+  }, [onPriceUpdate, isActive, simulationId, prices]);
 
   return {
     prices,
+    prevPrices,
     isActive,
     start,
     stop

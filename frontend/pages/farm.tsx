@@ -43,6 +43,7 @@ import { FARM_ADDRESS } from '@/constants/addresses';
 import { farmABI } from '@/constants/abis';
 import { TokenSymbol } from '@/utils/priceSimulation';
 import { usePriceSimulation } from '@/hooks/usePriceSimulation';
+import PriceCarousel from '@/components/PriceCarousel';
 
 // Define interfaces
 // 定义接口
@@ -77,6 +78,25 @@ interface FarmTranslation {
   withdrawError: string;
   harvestError: string;
   max: string;
+  // Admin panel translations
+  adminManagePools: string;
+  lpTokenAddress: string;
+  checkStatus: string;
+  allocPoints: string;
+  statusInFarm: string;
+  statusNotInFarm: string;
+  alreadyInFarm: string;
+  active: string;
+  disabled: string;
+  updatePool: string;
+  updating: string;
+  disablePool: string;
+  disabling: string;
+  addLpToken: string;
+  adding: string;
+  adminNote1: string;
+  adminNote2: string;
+  cancel: string;
 }
 
 interface FarmTranslationsType {
@@ -185,7 +205,7 @@ const FarmPage = () => {
   
   // Use the price simulation hook
   // 使用价格模拟钩子
-  const { prices: tokenPrices } = usePriceSimulation((newPrices) => {
+  const { prices: tokenPrices, prevPrices } = usePriceSimulation((newPrices) => {
     // This callback runs when prices update
     console.log("Price update detected, refreshing APRs with new prices:", newPrices);
     refreshPoolAPRs();
@@ -224,7 +244,26 @@ const FarmPage = () => {
       depositError: 'Deposit failed',
       withdrawError: 'Withdraw failed',
       harvestError: 'Harvest failed',
-      max: 'MAX'
+      max: 'MAX',
+      // Admin panel translations
+      adminManagePools: 'Admin: Manage Farm Pools',
+      lpTokenAddress: 'LP Token Address',
+      checkStatus: 'Check Status',
+      allocPoints: 'Allocation Points',
+      statusInFarm: 'Status',
+      statusNotInFarm: 'Not yet in farm',
+      alreadyInFarm: 'Already in farm (Pool ID: ',
+      active: 'Active',
+      disabled: 'Disabled',
+      updatePool: 'Update Pool',
+      updating: 'Updating...',
+      disablePool: 'Disable Pool',
+      disabling: 'Disabling...',
+      addLpToken: 'Add LP Token to Farm',
+      adding: 'Adding...',
+      adminNote1: 'Note: Only contract owner can add new pools or update existing ones.',
+      adminNote2: 'Disabling a pool sets allocation points to 0, rather than completely removing it. This is safer.',
+      cancel: 'Cancel'
     },
     zh: {
       farm: '农场',
@@ -256,7 +295,26 @@ const FarmPage = () => {
       depositError: '存入失败',
       withdrawError: '提取失败',
       harvestError: '收获失败',
-      max: '最大'
+      max: '最大',
+      // Admin panel translations
+      adminManagePools: '管理员：管理农场池',
+      lpTokenAddress: 'LP代币地址',
+      checkStatus: '检查状态',
+      allocPoints: '分配点数',
+      statusInFarm: '状态',
+      statusNotInFarm: '尚未在农场中',
+      alreadyInFarm: '已在农场中（池ID：',
+      active: '活跃中',
+      disabled: '已禁用',
+      updatePool: '更新池子',
+      updating: '更新中...',
+      disablePool: '禁用池子',
+      disabling: '禁用中...',
+      addLpToken: '添加LP代币到农场',
+      adding: '添加中...',
+      adminNote1: '注意：只有合约所有者才能添加新池子或更新现有池子。',
+      adminNote2: '禁用池子是将分配点数设置为0，而不是完全删除。这是最安全的方法。',
+      cancel: '取消'
     }
   };
   
@@ -1260,18 +1318,15 @@ const FarmPage = () => {
     return result;
   }, [farmPools, sortBy, sortDirection, filterOption]);
   
-  // Render the token price displays
-  // 渲染代币价格显示
+  // Render the token price displays (replaced with PriceCarousel)
+  // 渲染代币价格显示（替换为PriceCarousel）
   const renderTokenPrices = () => {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
-        {Object.entries(tokenPrices).map(([token, price]) => (
-          <div key={token} className="flex flex-col items-center p-2 bg-white dark:bg-gray-700 rounded shadow">
-            <span className="font-bold text-sm">{token}</span>
-            <span className="text-green-600 dark:text-green-400">${price.toFixed(4)}</span>
-          </div>
-        ))}
-      </div>
+      <PriceCarousel 
+        prices={tokenPrices} 
+        prevPrices={prevPrices} 
+        refreshInterval={5000} 
+      />
     );
   };
   
@@ -1279,16 +1334,15 @@ const FarmPage = () => {
   // 主渲染函数
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">{ft('farm')}</h1>
+      <h1 className="text-2xl font-bold mb-1">{ft('farm')}</h1>
       
-      {/* Token Price Section */}
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Token Prices (Simulated)</h2>
+      {/* Token Price Section - moved up with minimal spacing */}
+      <div className="mb-5">
         {renderTokenPrices()}
       </div>
       
       {!isConnected && (
-        <div className="bg-dark-lighter bg-opacity-50 border-l-4 border-primary text-white p-4 mb-6 rounded-md">
+        <div className="bg-dark-lighter bg-opacity-50 border-l-4 border-primary text-white p-4 mb-4 rounded-md">
           <p>{ft('walletWarning')}</p>
         </div>
       )}
@@ -1314,13 +1368,13 @@ const FarmPage = () => {
       
       {/* Sort and Filter Controls */}
       {/* 排序和筛选控件 */}
-      <div className="mb-4 flex flex-wrap items-center justify-between bg-dark-light p-3 rounded-lg">
+      <div className="mb-4 flex flex-wrap items-center justify-between bg-dark-lighter p-3 rounded-lg border border-primary/10">
         <div className="flex items-center space-x-2 mb-2 sm:mb-0">
           <label className="text-sm text-gray-400">Sort by:</label>
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-dark-lighter text-white border border-primary/30 rounded px-2 py-1 text-sm"
+            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
           >
             <option value="apr">APR</option>
             <option value="totalStaked">Total Staked</option>
@@ -1330,7 +1384,7 @@ const FarmPage = () => {
           
           <button
             onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-            className="bg-dark-lighter text-white border border-primary/30 rounded px-2 py-1 text-sm"
+            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
           >
             {sortDirection === 'desc' ? '↓ Desc' : '↑ Asc'}
           </button>
@@ -1341,7 +1395,7 @@ const FarmPage = () => {
           <select
             value={filterOption}
             onChange={(e) => setFilterOption(e.target.value as FilterOption)}
-            className="bg-dark-lighter text-white border border-primary/30 rounded px-2 py-1 text-sm"
+            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
           >
             <option value="all">All Pools</option>
             <option value="stakedOnly">Staked Only</option>
@@ -1350,7 +1404,7 @@ const FarmPage = () => {
           <button
             onClick={refreshRewards}
             disabled={isLoadingRewards}
-            className="bg-secondary hover:bg-secondary-hover text-dark-default rounded px-2 py-1 text-sm font-semibold"
+            className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-1 text-sm font-semibold transition-all"
           >
             {isLoadingRewards ? 'Refreshing...' : 'Refresh Rewards'}
           </button>
@@ -1394,10 +1448,10 @@ const FarmPage = () => {
           ) : (
             <div className="space-y-4">
               {filteredAndSortedPools.map((pool) => (
-                <div key={pool.pid} className="bg-dark-light rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
+                <div key={pool.pid} className="bg-dark-lighter rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
                   <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center">
-                      <div className="w-10 h-10 bg-dark-lighter rounded-full flex items-center justify-center mr-3 border border-primary/20">
+                      <div className="w-10 h-10 bg-dark-default rounded-full flex items-center justify-center mr-3 border border-gray-700">
                         <span className="text-sm font-semibold text-white">{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
                       </div>
                       <div>
@@ -1410,7 +1464,7 @@ const FarmPage = () => {
                       {pool.isLoadingAPR ? (
                         <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
                       ) : (
-                        <p className="font-semibold text-secondary">
+                        <p className="font-semibold text-emerald-500">
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
                             `${pool.apr.toFixed(2)}%`
@@ -1453,7 +1507,7 @@ const FarmPage = () => {
                   
                   <div className="flex justify-between">
                     <button 
-                      className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md transition-colors"
+                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                       onClick={() => openDepositModal(pool)}
                       disabled={!isConnected}
                     >
@@ -1463,7 +1517,7 @@ const FarmPage = () => {
                     {parseFloat(pool.userStaked) > 0 && (
                       <>
                         <button 
-                          className="bg-dark-lighter hover:bg-dark-default text-white border border-primary/50 px-4 py-2 rounded-md transition-colors"
+                          className="bg-dark-default hover:bg-dark-light text-white border border-gray-700 px-4 py-2 rounded-md transition-colors"
                           onClick={() => openWithdrawModal(pool)}
                           disabled={!isConnected || isWithdrawing}
                         >
@@ -1471,7 +1525,7 @@ const FarmPage = () => {
                         </button>
                         
                         <button 
-                          className="bg-secondary hover:bg-secondary-hover text-dark-default px-4 py-2 rounded-md font-semibold transition-colors"
+                          className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                           onClick={() => handleHarvest(pool)}
                           disabled={isHarvesting || parseFloat(pool.pendingRewards) <= 0 || pendingTx.type === 'harvest'}
                         >
@@ -1502,10 +1556,10 @@ const FarmPage = () => {
           ) : (
             <div className="space-y-4">
               {userFarmPositions.map((pool) => (
-                <div key={pool.pid} className="bg-dark-light rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
+                <div key={pool.pid} className="bg-dark-lighter rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
                   <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center">
-                      <div className="w-10 h-10 bg-dark-lighter rounded-full flex items-center justify-center mr-3 border border-primary/20">
+                      <div className="w-10 h-10 bg-dark-default rounded-full flex items-center justify-center mr-3 border border-gray-700">
                         <span className="text-sm font-semibold text-white">{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
                       </div>
                       <div>
@@ -1518,7 +1572,7 @@ const FarmPage = () => {
                       {pool.isLoadingAPR ? (
                         <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
                       ) : (
-                        <p className="font-semibold text-secondary">
+                        <p className="font-semibold text-emerald-500">
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
                             `${pool.apr.toFixed(2)}%`
@@ -1548,14 +1602,14 @@ const FarmPage = () => {
                   
                   <div className="flex justify-between">
                     <button 
-                      className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md transition-colors"
+                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                       onClick={() => openDepositModal(pool)}
                     >
                       {ft('deposit')}
                     </button>
                     
                     <button 
-                      className="bg-dark-lighter hover:bg-dark-default text-white border border-primary/50 px-4 py-2 rounded-md transition-colors"
+                      className="bg-dark-default hover:bg-dark-light text-white border border-gray-700 px-4 py-2 rounded-md transition-colors"
                       onClick={() => openWithdrawModal(pool)}
                       disabled={isWithdrawing}
                     >
@@ -1563,7 +1617,7 @@ const FarmPage = () => {
                     </button>
                     
                     <button 
-                      className="bg-secondary hover:bg-secondary-hover text-dark-default px-4 py-2 rounded-md font-semibold transition-colors"
+                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                       onClick={() => handleHarvest(pool)}
                       disabled={isHarvesting || parseFloat(pool.pendingRewards) <= 0 || pendingTx.type === 'harvest'}
                     >
@@ -1587,16 +1641,16 @@ const FarmPage = () => {
             <div className="mb-4">
               <p className="text-sm text-gray-400 mb-1">{ft('walletBalance')}: {parseFloat(selectedPool.userBalance).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-primary/30 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden bg-dark-default focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
                 <input
                   type="number"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
+                  className="flex-1 p-2 outline-none bg-dark-default text-white placeholder-gray-500"
                 />
                 <button
-                  className="bg-dark-lighter px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
+                  className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
                   onClick={handleMaxDeposit}
                 >
                   {ft('max')}
@@ -1606,16 +1660,16 @@ const FarmPage = () => {
             
             <div className="flex justify-between mt-6">
               <button
-                className="bg-dark-lighter hover:bg-dark-default text-white px-4 py-2 rounded-md border border-primary/30 transition-colors"
+                className="bg-dark-default hover:bg-dark-light text-white px-4 py-2 rounded-md border border-gray-700 transition-colors"
                 onClick={() => setShowDepositModal(false)}
               >
-                Cancel
+                {ft('cancel')}
               </button>
               
               {parseFloat(selectedPool.userBalance) > 0 && (
                 <>
                   <button
-                    className="bg-dark-lighter hover:bg-dark-default text-white border border-primary/50 px-4 py-2 rounded-md transition-colors"
+                    className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                     onClick={handleApprove}
                     disabled={isApproving}
                   >
@@ -1623,7 +1677,7 @@ const FarmPage = () => {
                   </button>
                   
                   <button
-                    className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md transition-colors"
+                    className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                     onClick={handleDeposit}
                     disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0 || parseFloat(depositAmount) > parseFloat(selectedPool.userBalance)}
                   >
@@ -1646,16 +1700,16 @@ const FarmPage = () => {
             <div className="mb-4">
               <p className="text-sm text-gray-400 mb-1">{ft('stakedAmount')}: {parseFloat(selectedPool.userStaked).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-primary/30 rounded-md overflow-hidden bg-white focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden bg-dark-default focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
                 <input
                   type="number"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
+                  className="flex-1 p-2 outline-none bg-dark-default text-white placeholder-gray-500"
                 />
                 <button
-                  className="bg-dark-lighter px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
+                  className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
                   onClick={handleMaxWithdraw}
                 >
                   {ft('max')}
@@ -1665,14 +1719,14 @@ const FarmPage = () => {
             
             <div className="flex justify-between mt-6">
               <button
-                className="bg-dark-lighter hover:bg-dark-default text-white px-4 py-2 rounded-md border border-primary/30 transition-colors"
+                className="bg-dark-default hover:bg-dark-light text-white px-4 py-2 rounded-md border border-gray-700 transition-colors"
                 onClick={() => setShowWithdrawModal(false)}
               >
-                取消
+                {ft('cancel')}
               </button>
               
               <button
-                className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md transition-colors"
+                className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                 onClick={handleWithdraw}
                 disabled={isWithdrawing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(selectedPool.userStaked)}
               >
@@ -1685,10 +1739,10 @@ const FarmPage = () => {
       
       {/* Admin Panel if isAdmin */}
       {isAdmin && (
-        <div className="mt-8 p-4 border border-primary/20 rounded-lg bg-dark-light">
-          <h2 className="text-xl font-bold mb-4 text-white">Admin: Manage Farm Pools</h2>
+        <div className="mt-8 p-4 border border-primary/20 rounded-lg bg-dark-lighter">
+          <h2 className="text-xl font-bold mb-4 text-white">{ft('adminManagePools')}</h2>
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1 text-gray-300">LP Token Address</label>
+            <label className="block text-sm font-medium mb-1 text-gray-300">{ft('lpTokenAddress')}</label>
             <div className="flex">
               <input
                 type="text"
@@ -1699,46 +1753,44 @@ const FarmPage = () => {
                   setLpTokenStatus({ checked: false, isInFarm: false });
                 }}
                 placeholder="0x..."
-                className="flex-1 p-2 border border-primary/30 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary"
-                style={{background: 'white', color: 'black'}}
+                className="flex-1 p-2 border border-gray-700 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white text-black"
               />
               <button
-                className="ml-2 bg-secondary hover:bg-secondary-hover text-dark-default px-4 py-2 rounded-md transition-colors font-semibold"
+                className="ml-2 bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all font-semibold"
                 onClick={checkLpTokenStatus}
                 disabled={!newLpToken || !ethers.utils.isAddress(newLpToken)}
               >
-                Check Status
+                {ft('checkStatus')}
               </button>
             </div>
           </div>
           
           {lpTokenStatus.checked && (
-            <div className="mb-4 p-2 border rounded-md bg-dark-default border-primary/20 text-white">
+            <div className="mb-4 p-2 border rounded-md bg-dark-default border-gray-700 text-white">
               <p>
-                Status: {lpTokenStatus.isInFarm 
-                  ? `Already in farm (Pool ID: ${lpTokenStatus.poolId}${
+                {ft('statusInFarm')}: {lpTokenStatus.isInFarm 
+                  ? `${ft('alreadyInFarm')}${lpTokenStatus.poolId}${
                     lpTokenStatus.allocPoint !== undefined 
-                      ? `, Allocation Points: ${lpTokenStatus.allocPoint}${
+                      ? `, ${ft('allocPoints')}: ${lpTokenStatus.allocPoint}${
                         lpTokenStatus.allocPoint === 0 
-                          ? ' - 已禁用' 
-                          : ' - 活跃中'
+                          ? ` - ${ft('disabled')}` 
+                          : ` - ${ft('active')}`
                         }` 
                       : ''
                     })` 
-                  : 'Not yet in farm'}
+                  : ft('statusNotInFarm')}
               </p>
             </div>
           )}
           
           <div className="mb-4">
-            <label className="block text-sm font-medium mb-1 text-gray-300">Allocation Points</label>
+            <label className="block text-sm font-medium mb-1 text-gray-300">{ft('allocPoints')}</label>
             <input
               type="number"
               value={allocPoint}
               onChange={(e) => setAllocPoint(e.target.value)}
               placeholder="100"
-              className="w-full p-2 border border-primary/30 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary"
-              style={{background: 'white', color: 'black'}}
+              className="w-full p-2 border border-gray-700 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white text-black"
             />
           </div>
           
@@ -1746,35 +1798,35 @@ const FarmPage = () => {
             {lpTokenStatus.isInFarm ? (
               <>
                 <button
-                  className="bg-secondary hover:bg-secondary-hover text-dark-default px-4 py-2 rounded-md transition-colors font-semibold"
+                  className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all font-semibold"
                   onClick={handleUpdatePool}
                   disabled={isAddingPool || isUpdatingPool || isDeletingPool}
                 >
-                  {isUpdatingPool ? 'Updating...' : `Update Pool ${lpTokenStatus.poolId}`}
+                  {isUpdatingPool ? ft('updating') : `${ft('updatePool')} ${lpTokenStatus.poolId}`}
                 </button>
                 
                 <button
-                  className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-md transition-colors"
+                  className="bg-red-900/30 hover:bg-red-900/50 text-red-400 px-4 py-2 rounded-md transition-colors"
                   onClick={handleDisablePool}
                   disabled={isAddingPool || isUpdatingPool || isDeletingPool}
                 >
-                  {isDeletingPool ? '禁用中...' : `禁用池子 ${lpTokenStatus.poolId}`}
+                  {isDeletingPool ? ft('disabling') : `${ft('disablePool')} ${lpTokenStatus.poolId}`}
                 </button>
               </>
             ) : (
               <button
-                className="bg-primary hover:bg-primary-hover text-white px-4 py-2 rounded-md transition-colors"
+                className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
                 onClick={handleAddLpToken}
                 disabled={isAddingPool || isUpdatingPool || isDeletingPool || !newLpToken || !ethers.utils.isAddress(newLpToken)}
               >
-                {isAddingPool ? 'Adding...' : 'Add LP Token to Farm'}
+                {isAddingPool ? ft('adding') : ft('addLpToken')}
               </button>
             )}
           </div>
           
           <div className="mt-4 text-sm text-gray-400">
-            <p>注意：只有合约所有者才能添加新池子或更新现有池子。</p>
-            <p>禁用池子是将分配点数设置为0，而不是完全删除。这是最安全的方法。</p>
+            <p>{ft('adminNote1')}</p>
+            <p>{ft('adminNote2')}</p>
           </div>
         </div>
       )}
