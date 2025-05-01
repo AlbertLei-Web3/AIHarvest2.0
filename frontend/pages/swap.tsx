@@ -714,14 +714,6 @@ const SwapPage = () => {
                   setShowTokenModal(true);
                 }}
               >
-                <div className="w-8 h-8 relative">
-                  <Image 
-                    src={tokens[fromToken].logo}
-                    alt={tokens[fromToken].symbol}
-                    width={32}
-                    height={32}
-                  />
-                </div>
                 <span className="text-white font-medium">{tokens[fromToken].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -782,14 +774,6 @@ const SwapPage = () => {
                   setShowTokenModal(true);
                 }}
               >
-                <div className="w-8 h-8 relative">
-                  <Image 
-                    src={tokens[toToken].logo}
-                    alt={tokens[toToken].symbol}
-                    width={32}
-                    height={32}
-                  />
-                </div>
                 <span className="text-white font-medium">{tokens[toToken].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -900,20 +884,12 @@ const SwapPage = () => {
                       }
                     }}
                   >
-                    <div className="w-8 h-8 relative mr-3">
-                      <Image 
-                        src={tokens[id].logo}
-                        alt={tokens[id].symbol}
-                        width={32}
-                        height={32}
-                      />
+                    <div className="ml-3">
+                      <div className="font-semibold text-white">{tokens[id].symbol}</div>
+                      <div className="text-sm text-gray-400">{tokens[id].name}</div>
                     </div>
-                    <div>
-                      <div className="text-white font-medium">{tokens[id].symbol}</div>
-                      <div className="text-gray-400 text-sm">{tokens[id].name}</div>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <div className="text-white">{tokens[id].balance}</div>
+                    <div className="ml-auto text-sm text-gray-300">
+                      {tokens[id].balance}
                     </div>
                   </div>
                 ))}

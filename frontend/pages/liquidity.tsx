@@ -1971,7 +1971,6 @@ const LiquidityPage = () => {
                   setShowTokenModal(true);
                 }}
               >
-                <img src={tokens[tokenA].logo} className="h-6 w-6 mr-2" alt={tokens[tokenA].symbol} />
                 <span className="font-medium text-white mr-1">{tokens[tokenA].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -2016,7 +2015,6 @@ const LiquidityPage = () => {
                   setShowTokenModal(true);
                 }}
               >
-                <img src={tokens[tokenB].logo} className="h-6 w-6 mr-2" alt={tokens[tokenB].symbol} />
                 <span className="font-medium text-white mr-1">{tokens[tokenB].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -2030,15 +2028,10 @@ const LiquidityPage = () => {
             <div className="bg-dark-default rounded-lg p-4 mb-4 border border-gray-700">
               <h3 className="font-medium text-white mb-2">{lt('lpTokensReceive')}</h3>
               <div className="flex items-center">
-                <div className="relative">
-                  <div className="h-6 w-6 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
-                    <img src={tokens[tokenA].logo} className="h-6 w-6" alt={tokens[tokenA].symbol} />
-                  </div>
-                  <div className="h-6 w-6 rounded-full bg-gray-700 absolute -right-2 -bottom-2 flex items-center justify-center overflow-hidden">
-                    <img src={tokens[tokenB].logo} className="h-6 w-6" alt={tokens[tokenB].symbol} />
-                  </div>
+                <div className="bg-dark-lightest px-3 py-1 rounded-lg">
+                  <span className="text-white font-medium">{tokens[tokenA].symbol}-{tokens[tokenB].symbol}</span>
                 </div>
-                <span className="ml-4 text-white">{lpAmount} {tokens[tokenA].symbol}-{tokens[tokenB].symbol} LP</span>
+                <span className="ml-4 text-white">{lpAmount} LP</span>
               </div>
               <div className="mt-2 text-sm text-gray-400">
                 <div className="flex justify-between">
@@ -2161,15 +2154,9 @@ const LiquidityPage = () => {
                   <div key={index} className="border border-gray-700 rounded-lg p-4 mb-3 bg-dark-default">
                     <div className="flex justify-between mb-2">
                       <div className="flex items-center">
-                        <div className="relative">
-                          <div className="h-7 w-7 rounded-full bg-gray-700 flex items-center justify-center overflow-hidden">
-                            <img src={tokenAObj.logo} className="h-7 w-7" alt={position.tokenASymbol} />
-                          </div>
-                          <div className="h-7 w-7 rounded-full bg-gray-700 absolute -right-2 -bottom-2 flex items-center justify-center overflow-hidden">
-                            <img src={tokenBObj.logo} className="h-7 w-7" alt={position.tokenBSymbol} />
-                          </div>
+                        <div className="bg-dark-lightest px-3 py-1 rounded-lg mr-2">
+                          <span className="text-white font-medium">{position.tokenASymbol}-{position.tokenBSymbol}</span>
                         </div>
-                        <span className="font-medium ml-3 text-white">{position.tokenASymbol}-{position.tokenBSymbol}</span>
                       </div>
                       <div className="flex space-x-2">
                         <button 
@@ -2266,10 +2253,12 @@ const LiquidityPage = () => {
                   className="flex items-center p-3 hover:bg-dark-default rounded-lg cursor-pointer"
                   onClick={() => handleTokenSelect(tokenId)}
                 >
-                  <img src={tokens[tokenId].logo} className="h-8 w-8 mr-3" alt={tokens[tokenId].symbol} />
                   <div>
                     <div className="font-medium text-white">{tokens[tokenId].symbol}</div>
                     <div className="text-xs text-gray-400">{tokens[tokenId].name}</div>
+                  </div>
+                  <div className="ml-auto text-right">
+                    <div className="text-white">{tokens[tokenId].balance}</div>
                   </div>
                 </div>
               ))}
