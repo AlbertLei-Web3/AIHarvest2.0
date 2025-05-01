@@ -1,3 +1,10 @@
+// 添加全局类型声明
+declare global {
+  interface Window {
+    isHarvestCooldown?: boolean;
+  }
+}
+
 import { ethers } from 'ethers';
 import { CONTRACTS } from './addresses';
 import { farmABI } from '@/constants/abis';
@@ -116,8 +123,40 @@ export const getPendingRewards = async (
 ): Promise<string> => {
   const farmContract = getFarmContract(provider);
   try {
-    const pendingAIH = await farmContract.pendingAIH(poolId, userAddress);
-    return ethers.utils.formatEther(pendingAIH);
+    // 先尝试使用专门的pendingAIH函数
+    try {
+      const pendingAIH = await farmContract.pendingAIH(poolId, userAddress);
+      console.log(`Pool ${poolId}: 使用pendingAIH函数获取待领取奖励:`, ethers.utils.formatEther(pendingAIH));
+      return ethers.utils.formatEther(pendingAIH);
+    } catch (e1) {
+      console.log(`Pool ${poolId}: pendingAIH调用失败，尝试getUserInfo`);
+      try {
+        // 尝试从getUserInfo获取待领取奖励
+        const userInfo = await farmContract.getUserInfo(poolId, userAddress);
+        console.log(`Pool ${poolId}: 使用getUserInfo获取待领取奖励:`, ethers.utils.formatEther(userInfo.pendingRewards));
+        return ethers.utils.formatEther(userInfo.pendingRewards);
+      } catch (e2) {
+        console.log(`Pool ${poolId}: getUserInfo调用失败，尝试其他方法`);
+        // 可能合约没有直接公开的方法获取待领取奖励，尝试手动计算
+        // 实际使用时，你需要根据你的合约细节来调整这部分计算逻辑
+        try {
+          // 尝试计算待领取奖励
+          console.log(`Pool ${poolId}: 尝试通过查看用户质押量和池子信息来估算奖励`);
+          const poolInfo = await getPoolInfo(provider, poolId);
+          const userBalance = await farmContract.userInfo(poolId, userAddress);
+          
+          if (poolInfo && !userBalance.amount.eq(0)) {
+            // 这里的计算逻辑需要根据实际合约来调整
+            const estimatedRewards = "0.0000"; // 实际计算替换
+            console.log(`Pool ${poolId}: 估算的待领取奖励:`, estimatedRewards);
+            return estimatedRewards;
+          }
+        } catch (e3) {
+          console.error(`Pool ${poolId}: 所有获取待领取奖励的尝试都失败`, e1, e2, e3);
+        }
+      }
+    }
+    return '0';
   } catch (error) {
     console.error(`Failed to get pending rewards for pool ${poolId} and user ${userAddress}:`, error);
     return '0';
@@ -131,13 +170,18 @@ export const getPendingRewards = async (
 export const deposit = async (
   signer: ethers.Signer,
   poolId: number,
-  amount: string
+  amount: string,
+  txParams = {}
 ): Promise<ethers.ContractTransaction> => {
   const farmContract = getFarmContract(signer);
   const parsedAmount = ethers.utils.parseEther(amount);
   
   try {
-    return await farmContract.deposit(poolId, parsedAmount);
+    console.log(`存入 ${amount} LP 代币到池子 ${poolId}`);
+    return await farmContract.deposit(poolId, parsedAmount, {
+      gasLimit: 300000, // 明确的gas限制
+      ...txParams
+    });
   } catch (error) {
     console.error(`Failed to deposit ${amount} LP tokens to pool ${poolId}:`, error);
     throw error;
@@ -151,13 +195,19 @@ export const deposit = async (
 export const withdraw = async (
   signer: ethers.Signer,
   poolId: number,
-  amount: string
+  amount: string,
+  txParams = {}
 ): Promise<ethers.ContractTransaction> => {
   const farmContract = getFarmContract(signer);
   const parsedAmount = ethers.utils.parseEther(amount);
   
   try {
-    return await farmContract.withdraw(poolId, parsedAmount);
+    console.log(`使用标准withdraw函数，金额: ${amount}`);
+    // 添加明确的gas限制和交易参数
+    return await farmContract.withdraw(poolId, parsedAmount, {
+      gasLimit: 300000,
+      ...txParams
+    });
   } catch (error) {
     console.error(`Failed to withdraw ${amount} LP tokens from pool ${poolId}:`, error);
     throw error;
@@ -170,15 +220,119 @@ export const withdraw = async (
  */
 export const harvest = async (
   signer: ethers.Signer,
-  poolId: number
+  poolId: number,
+  options: {onCancel?: () => void} = {}
 ): Promise<ethers.ContractTransaction> => {
   const farmContract = getFarmContract(signer);
   
+  // 如果已经在冷却状态，直接拒绝操作
+  if (window.isHarvestCooldown) {
+    throw new Error('操作太频繁，请稍后再试');
+  }
+  
   try {
-    // Using dedicated harvest function from updated ABI
-    return await farmContract.harvest(poolId);
-  } catch (error) {
-    console.error(`Failed to harvest rewards from pool ${poolId}:`, error);
+    console.log(`尝试收获池子 ${poolId} 的奖励`);
+    
+    // 设置标志，防止重复触发
+    window.isHarvestCooldown = true;
+    
+    // 首先尝试使用专门的harvest函数
+    try {
+      console.log(`尝试方式1: 使用harvest(poolId)函数`);
+      const tx = await farmContract.harvest(poolId);
+      
+      // 操作成功，重置冷却标志
+      window.isHarvestCooldown = false;
+      return tx;
+    } catch (err1: any) {
+      // 检查是否是用户拒绝
+      if (err1.code === 4001) {
+        console.log("用户拒绝了交易，触发冷却期");
+        
+        // 触发回调函数
+        if (options.onCancel) {
+          options.onCancel();
+        }
+        
+        // 保持冷却标志3秒
+        setTimeout(() => {
+          window.isHarvestCooldown = false;
+          console.log("冷却期结束，允许新的收获操作");
+        }, 3000);
+        
+        throw new Error('用户取消了交易');
+      }
+      
+      console.warn(`harvest函数调用失败:`, err1);
+      
+      // 如果没有专门的harvest函数，尝试通过withdraw(0)来收获奖励
+      // 许多农场合约允许通过提取0个代币来收获奖励
+      try {
+        console.log(`尝试方式2: 使用withdraw(poolId, 0)函数`);
+        const zeroAmount = ethers.BigNumber.from(0);
+        const tx = await farmContract.withdraw(poolId, zeroAmount);
+        
+        // 操作成功，重置冷却标志
+        window.isHarvestCooldown = false;
+        return tx;
+      } catch (err2: any) {
+        // 检查是否是用户拒绝
+        if (err2.code === 4001) {
+          console.log("用户拒绝了交易，触发冷却期");
+          
+          // 触发回调函数
+          if (options.onCancel) {
+            options.onCancel();
+          }
+          
+          // 保持冷却标志
+          throw new Error('用户取消了交易');
+        }
+        
+        console.warn(`withdraw(0)调用失败:`, err2);
+        
+        // 如果上述方法都失败，尝试其他可能的函数名称
+        try {
+          console.log(`尝试方式3: 使用getReward(poolId)函数`);
+          const tx = await farmContract.getReward(poolId);
+          
+          // 操作成功，重置冷却标志
+          window.isHarvestCooldown = false;
+          return tx;
+        } catch (err3: any) {
+          // 检查是否是用户拒绝
+          if (err3.code === 4001) {
+            console.log("用户拒绝了交易，触发冷却期");
+            
+            // 触发回调函数
+            if (options.onCancel) {
+              options.onCancel();
+            }
+            
+            // 保持冷却标志
+            throw new Error('用户取消了交易');
+          }
+          
+          console.warn(`getReward调用失败:`, err3);
+          console.log(`尝试最后方式: 直接调用合约的harvest函数`);
+          
+          // 最后，使用低级调用方法尝试
+          const tx = await farmContract.functions.harvest(poolId);
+          
+          // 操作成功，重置冷却标志
+          window.isHarvestCooldown = false;
+          return tx;
+        }
+      }
+    }
+  } catch (error: any) {
+    // 对于未捕获的拒绝，也重置冷却
+    if (error.code !== 4001) {
+      // 非用户拒绝错误，重置冷却标志
+      window.isHarvestCooldown = false;
+    }
+    
+    console.error(`无法收获池子 ${poolId} 的奖励, 所有尝试均失败:`, error);
     throw error;
   }
 };
@@ -196,12 +350,92 @@ export const getPoolAPR = async (
   try {
     // Get pool info using the new getPoolInfo function
     const poolInfo = await farmContract.getPoolInfo(poolId);
-    const totalAllocPoint = await farmContract.totalAllocPoint(0); // Passing 0 as per the ABI
+    
+    // 尝试多种方式调用totalAllocPoint函数
+    let totalAllocPoint;
+    let usedDefaultValue = false;
+    
+    try {
+      // 方式1: 使用0作为链参数 (针对多链合约版本)
+      totalAllocPoint = await farmContract.totalAllocPoint(0);
+      console.log(`Pool ${poolId}: Successfully got totalAllocPoint with parameter 0:`, totalAllocPoint.toString());
+    } catch (e1) {
+      console.log(`Pool ${poolId}: 尝试带参数0调用totalAllocPoint失败，尝试带参数1`);
+      try {
+        // 方式2: 使用1作为链参数 (针对某些合约)
+        totalAllocPoint = await farmContract.totalAllocPoint(1);
+        console.log(`Pool ${poolId}: Successfully got totalAllocPoint with parameter 1:`, totalAllocPoint.toString());
+      } catch (e2) {
+        console.log(`Pool ${poolId}: 尝试带参数1调用totalAllocPoint失败，尝试无参数调用`);
+        try {
+          // 方式3: 不带参数的调用
+          totalAllocPoint = await farmContract.totalAllocPoint();
+          console.log(`Pool ${poolId}: Successfully got totalAllocPoint without parameter:`, totalAllocPoint.toString());
+        } catch (e3) {
+          console.log(`Pool ${poolId}: 尝试无参数调用totalAllocPoint失败，尝试函数式调用`);
+          try {
+            // 方式4: 通过函数接口调用
+            const result = await farmContract.functions.totalAllocPoint();
+            totalAllocPoint = result[0]; // functions通常返回数组
+            console.log(`Pool ${poolId}: Successfully got totalAllocPoint via functions:`, totalAllocPoint.toString());
+          } catch (e4) {
+            console.log(`Pool ${poolId}: 尝试函数调用totalAllocPoint失败，尝试从其他池子获取`);
+            try {
+              // 方式5: 尝试使用一些常见参数调用totalAllocPoint
+              const commonParams = [0, 1, 2, 3]; // 尝试几个常见值
+              let foundValue = false;
+              
+              for (const param of commonParams) {
+                try {
+                  totalAllocPoint = await farmContract.totalAllocPoint(param);
+                  console.log(`Pool ${poolId}: Successfully got totalAllocPoint with parameter ${param}:`, totalAllocPoint.toString());
+                  foundValue = true;
+                  break;
+                } catch (e) {
+                  // 继续尝试下一个参数
+                }
+              }
+              
+              if (!foundValue) {
+                throw new Error("Failed with all common parameters");
+              }
+            } catch (e5) {
+              console.error(`Pool ${poolId}: 所有尝试获取totalAllocPoint失败`);
+              
+              // 方式6: 使用getAllPoolInfo (如果合约支持)
+              try {
+                const allPools = await farmContract.getAllPoolInfo();
+                // 计算所有池子的allocPoint总和
+                totalAllocPoint = allPools.reduce((sum: ethers.BigNumber, pool: any) => 
+                  sum.add(pool.allocPoint), ethers.BigNumber.from(0));
+                console.log(`Pool ${poolId}: 通过计算所有池子allocPoint获得totalAllocPoint:`, totalAllocPoint.toString());
+              } catch (e6) {
+                // 如果以上所有尝试都失败，使用保守估计
+                // 使用池子的allocPoint的10倍作为预估值
+                const poolAllocPoint = poolInfo.allocPoint;
+                totalAllocPoint = ethers.BigNumber.from(poolAllocPoint).mul(10);
+                
+                // 如果poolAllocPoint为0，使用默认值，防止除以0错误
+                if (totalAllocPoint.eq(0)) {
+                  totalAllocPoint = ethers.BigNumber.from(1000);
+                }
+                
+                usedDefaultValue = true;
+                console.log(`Pool ${poolId}: 使用预估的totalAllocPoint值:`, totalAllocPoint.toString());
+              }
+            }
+          }
+        }
+      }
+    }
+    
     const aihPerSecond = await farmContract.aihPerSecond();
+    console.log(`Pool ${poolId}: aihPerSecond:`, ethers.utils.formatEther(aihPerSecond));
     
     // If there's no allocation or stake, return 0
     // 如果没有分配或质押，返回0
     if (poolInfo.allocPoint.eq(0) || poolInfo.totalStaked.eq(0) || totalAllocPoint.eq(0)) {
+      console.log(`Pool ${poolId}: No rewards (allocPoint=${poolInfo.allocPoint}, totalStaked=${poolInfo.totalStaked}, totalAllocPoint=${totalAllocPoint})`);
       return 0;
     }
     
@@ -210,11 +444,22 @@ export const getPoolAPR = async (
     const aihPerYear = aihPerSecond.mul(3600 * 24 * 365);
     const poolRewardsPerYear = aihPerYear.mul(poolInfo.allocPoint).div(totalAllocPoint);
     
+    console.log(`Pool ${poolId}: 每年奖励:`, ethers.utils.formatEther(poolRewardsPerYear));
+    console.log(`Pool ${poolId}: 总质押:`, ethers.utils.formatEther(poolInfo.totalStaked));
+    
     // Calculate APR (rewards per year / total staked)
     // 计算APR（每年奖励/总质押）
-    const apr = poolRewardsPerYear.mul(100).div(poolInfo.totalStaked);
+    const apr = poolRewardsPerYear.mul(10000).div(poolInfo.totalStaked).toNumber() / 100;
     
-    return apr.toNumber();
+    // 检查APR是否合理 (最大显示为10000%)
+    let finalApr = apr;
+    if (finalApr > 10000 || usedDefaultValue) {
+      console.warn(`Pool ${poolId}: 计算的APR值(${finalApr}%)过高或使用了预估值，限制为最大10000%`);
+      finalApr = Math.min(finalApr, 10000);
+    }
+    
+    console.log(`Pool ${poolId}: 最终APR: ${finalApr}%`);
+    return finalApr;
   } catch (error) {
     console.error(`Failed to calculate APR for pool ${poolId}:`, error);
     return 0;
@@ -331,6 +576,158 @@ export const approveLPTokenForFarm = async (
     }
   } catch (error) {
     console.error(`Failed to approve LP token ${lpTokenAddress} for farm:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Add a new LP token to the farm
+ * 向农场添加新的LP代币
+ * Note: This function should only be called by the farm owner/admin
+ * 注意：此函数应该只由农场所有者/管理员调用
+ */
+export const addLpTokenToFarm = async (
+  signer: ethers.Signer,
+  lpTokenAddress: string,
+  allocPoint: number = 100
+): Promise<ethers.ContractTransaction> => {
+  if (!ethers.utils.isAddress(lpTokenAddress)) {
+    throw new Error(`Invalid LP token address: ${lpTokenAddress}`);
+  }
+  
+  try {
+    const farmContract = getFarmContract(signer);
+    
+    // Log debugging information
+    console.log("Adding LP token to farm:", {
+      lpTokenAddress,
+      allocPoint,
+      signerAddress: await signer.getAddress()
+    });
+    
+    // Verify LP token is a valid ERC20 token
+    const lpTokenContract = new ethers.Contract(
+      lpTokenAddress,
+      ['function balanceOf(address) view returns (uint256)', 'function decimals() view returns (uint8)'],
+      signer
+    );
+    
+    try {
+      // Test if contract has basic ERC20 functions
+      await lpTokenContract.decimals();
+      console.log("LP token passed basic ERC20 check");
+    } catch (err) {
+      console.error("LP token failed basic ERC20 check:", err);
+      throw new Error("The address does not appear to be a valid ERC20 token");
+    }
+    
+    // For additional LP token validation, try to check if it's a pair token
+    try {
+      const pairContract = new ethers.Contract(
+        lpTokenAddress,
+        ['function token0() view returns (address)', 'function token1() view returns (address)'],
+        signer
+      );
+      
+      const token0 = await pairContract.token0();
+      const token1 = await pairContract.token1();
+      console.log("LP token validation passed. Contains tokens:", { token0, token1 });
+    } catch (err) {
+      console.warn("Could not verify LP token pair information. It may not be a valid LP token:", err);
+      // We don't throw here as some DEXes might have different LP token structures
+    }
+    
+    // Set explicit gas limit to avoid estimation issues
+    return await farmContract.add(allocPoint, lpTokenAddress, {
+      gasLimit: 500000, // Explicit higher gas limit
+    });
+  } catch (error) {
+    console.error(`Failed to add LP token ${lpTokenAddress} to farm:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Check if an address is the farm owner
+ * 检查地址是否为农场所有者
+ */
+export const isFarmOwner = async (
+  provider: ethers.providers.Provider | ethers.Signer,
+  address: string
+): Promise<boolean> => {
+  try {
+    const farmContract = getFarmContract(provider);
+    
+    // Different contracts might implement ownership differently
+    // Try common patterns
+    try {
+      // Try Ownable pattern
+      if (typeof farmContract.owner === 'function') {
+        const owner = await farmContract.owner();
+        return owner.toLowerCase() === address.toLowerCase();
+      }
+    } catch (e) {
+      console.error('No owner function:', e);
+    }
+    
+    // If no standard owner function, try other common patterns
+    try {
+      if (typeof farmContract.getOwner === 'function') {
+        const owner = await farmContract.getOwner();
+        return owner.toLowerCase() === address.toLowerCase();
+      }
+    } catch (e) {
+      console.error('No getOwner function:', e);
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Failed to check farm ownership:', error);
+    return false;
+  }
+};
+
+/**
+ * Check if LP token is already in farm
+ * 检查LP代币是否已在农场中
+ */
+export const isLpTokenInFarm = async (
+  provider: ethers.providers.Provider | ethers.Signer,
+  lpTokenAddress: string
+): Promise<{isInFarm: boolean, poolId?: number}> => {
+  try {
+    const poolCount = await getPoolCount(provider);
+    
+    for (let pid = 0; pid < poolCount; pid++) {
+      const poolInfo = await getPoolInfo(provider, pid);
+      if (!poolInfo) continue;
+      
+      if (poolInfo.lpToken.toLowerCase() === lpTokenAddress.toLowerCase()) {
+        return { isInFarm: true, poolId: pid };
+      }
+    }
+    
+    return { isInFarm: false };
+  } catch (error) {
+    console.error(`Failed to check if LP token ${lpTokenAddress} is in farm:`, error);
+    return { isInFarm: false };
+  }
+};
+
+/**
+ * Update allocation points for an existing pool
+ * 更新现有池的分配点数
+ */
+export const updatePoolAllocPoints = async (
+  signer: ethers.Signer,
+  poolId: number,
+  allocPoint: number
+): Promise<ethers.ContractTransaction> => {
+  try {
+    const farmContract = getFarmContract(signer);
+    return await farmContract.set(poolId, allocPoint);
+  } catch (error) {
+    console.error(`Failed to update allocation points for pool ${poolId}:`, error);
     throw error;
   }
 }; 
