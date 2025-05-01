@@ -91,6 +91,7 @@ interface FarmPool {
   lpTokenName: string;
   lpTokenSymbol: string;
   apr: number;
+  isLoadingAPR?: boolean;
   totalStaked: string;
   userBalance: string;
   userStaked: string;
@@ -488,10 +489,15 @@ const FarmPage = () => {
           
           // Try to calculate APR (may fail for some pools)
           let apr = 0;
+          let isLoadingAPR = false;
+          
           try {
+            isLoadingAPR = true;
             apr = await getPoolAPR(provider, pid);
+            isLoadingAPR = false;
             console.log(`Pool ${pid} APR: ${apr}%`);
           } catch (error) {
+            isLoadingAPR = false;
             console.warn(`[DeFi Warning] Error calculating APR for pool ${pid}:`, error);
           }
           
@@ -525,6 +531,7 @@ const FarmPage = () => {
             lpTokenName,
             lpTokenSymbol,
             apr,
+            isLoadingAPR,
             totalStaked: ethers.utils.formatEther(poolInfo.totalStaked),
             userBalance,
             userStaked,
@@ -1251,9 +1258,16 @@ const FarmPage = () => {
                     <div className="text-right">
                       <p className="text-sm text-gray-400">{ft('apr')}</p>
                       <p className="font-semibold text-secondary">
-                        {isNaN(pool.apr) || pool.apr < 0 ? 
-                          '计算中...' : 
-                          `${pool.apr.toFixed(2)}%`
+                        {pool.isLoadingAPR ? 
+                          <div className="flex items-center justify-end">
+                            <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
+                            <span>计算中...</span>
+                          </div> :
+                          isNaN(pool.apr) || pool.apr <= 0 ? 
+                            '0.00%' : 
+                            pool.apr > 500 ?
+                              '500.00%' :  // 最大显示500%
+                              `${pool.apr.toFixed(2)}%`
                         }
                       </p>
                     </div>
@@ -1355,9 +1369,16 @@ const FarmPage = () => {
                     <div className="text-right">
                       <p className="text-sm text-gray-400">{ft('apr')}</p>
                       <p className="font-semibold text-secondary">
-                        {isNaN(pool.apr) || pool.apr < 0 ? 
-                          '计算中...' : 
-                          `${pool.apr.toFixed(2)}%`
+                        {pool.isLoadingAPR ? 
+                          <div className="flex items-center justify-end">
+                            <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
+                            <span>计算中...</span>
+                          </div> :
+                          isNaN(pool.apr) || pool.apr <= 0 ? 
+                            '0.00%' : 
+                            pool.apr > 500 ?
+                              '500.00%' :  // 最大显示500%
+                              `${pool.apr.toFixed(2)}%`
                         }
                       </p>
                     </div>
