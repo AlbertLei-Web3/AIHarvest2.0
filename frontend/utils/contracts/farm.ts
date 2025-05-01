@@ -8,6 +8,7 @@ declare global {
 import { ethers } from 'ethers';
 import { CONTRACTS } from './addresses';
 import { farmABI } from '@/constants/abis';
+import { getTokenPrice, calculateLpTokenPrice, TokenSymbol, isValidTokenSymbol, priceRanges } from '../priceSimulation';
 
 // Pool info interface - 池子信息接口
 interface PoolInfo {
@@ -389,12 +390,13 @@ export const calculateTotalAllocPoint = async (
 };
 
 /**
- * Get the APR (Annual Percentage Rate) for a specific pool
- * 获取特定池子的年化收益率
+ * Get pool APR based on pool info and simulated token prices
+ * 获取基于池子信息和模拟代币价格的池子APR
  */
 export const getPoolAPR = async (
   provider: ethers.providers.Provider | ethers.Signer,
-  poolId: number
+  poolId: number,
+  lpTokenDetails?: { tokenA: string; tokenB: string }
 ): Promise<number> => {
   const farmContract = getFarmContract(provider);
   
@@ -442,8 +444,8 @@ export const getPoolAPR = async (
       console.log(`Pool ${poolId}: aihPerSecond:`, ethers.utils.formatEther(aihPerSecond));
     } catch (error) {
       console.error(`Pool ${poolId}: 无法获取aihPerSecond:`, error);
-      // 使用一个合理的默认值：0.1 AIH每秒 (合约中设置的默认值)
-      aihPerSecond = ethers.utils.parseEther("0.1");
+      // 使用一个更合理的默认值：0.01 AIH每秒 (减小默认值，使APR更合理)
+      aihPerSecond = ethers.utils.parseEther("0.01");
       console.log(`Pool ${poolId}: 使用默认aihPerSecond:`, ethers.utils.formatEther(aihPerSecond));
       usedDefaultValue = true;
     }
@@ -469,44 +471,90 @@ export const getPoolAPR = async (
       return 0;
     }
     
-    // Calculate APR (rewards per year / total staked)
-    // 计算APR（每年奖励/总质押）
+    // 使用模拟的价格数据计算APR
     try {
-      // 转换为数字前进行一些校验
-      if (poolRewardsPerYear.gt(ethers.constants.MaxUint256.div(10000))) {
-        console.warn(`Pool ${poolId}: poolRewardsPerYear值过大，可能导致溢出，使用安全值`);
-        // 使用一个安全的默认值
-        return usedDefaultValue ? 300 : 800;
+      console.log(`Pool ${poolId}: 使用以下LP代币详情计算价格:`, lpTokenDetails);
+      
+      // Get AIH price from price simulation
+      const aihPrice = getTokenPrice('AIH') || 0.1; // Default to 0.1 if undefined
+      console.log(`Pool ${poolId}: AIH价格: ${aihPrice}`);
+      
+      // Calculate yearly rewards value in USD
+      const yearlyRewardsInAIH = parseFloat(ethers.utils.formatEther(poolRewardsPerYear));
+      const yearlyRewardsValue = yearlyRewardsInAIH * aihPrice;
+      console.log(`Pool ${poolId}: 每年奖励价值: ${yearlyRewardsInAIH} AIH = $${yearlyRewardsValue}`);
+      
+      // Get LP token value based on token pair
+      let lpTokenPrice = 1.0; // Default price if we can't determine token pair
+      
+      if (lpTokenDetails) {
+        const tokenA = lpTokenDetails.tokenA;
+        const tokenB = lpTokenDetails.tokenB;
+        
+        console.log(`Pool ${poolId}: 尝试计算LP价格，使用代币 ${tokenA} 和 ${tokenB}`);
+        
+        // 检查token是否是有效的TokenSymbol并获取价格
+        const priceA = getTokenPrice(tokenA);
+        const priceB = getTokenPrice(tokenB);
+        
+        if (priceA !== undefined && priceB !== undefined) {
+          // 如果都是有效的代币符号并能获取价格
+          lpTokenPrice = calculateLpTokenPrice(tokenA, tokenB);
+          console.log(`Pool ${poolId}: 计算的LP价格: ${lpTokenPrice} (${tokenA}=$${priceA}, ${tokenB}=$${priceB})`);
+          
+          // 特别检查FHBI-TD pair的情况下，确保价格计算合理
+          if ((tokenA === 'FHBI' && tokenB === 'TD') || 
+              (tokenA === 'TD' && tokenB === 'FHBI')) {
+            // 确保FHBI-TD LP代币价格计算更加合理
+            // 通常LP代币价格至少应该反映其所含有的代币价值
+            const adjustedLpPrice = Math.max(lpTokenPrice, priceA + priceB);
+            if (lpTokenPrice < adjustedLpPrice) {
+              console.log(`Pool ${poolId}: 调整FHBI-TD LP价格从 ${lpTokenPrice} 到 ${adjustedLpPrice}`);
+              lpTokenPrice = adjustedLpPrice;
+            }
+          }
+        } else {
+          // 记录哪些代币没有价格
+          if (priceA === undefined) {
+            console.log(`Pool ${poolId}: 无法获取 ${tokenA} 的价格`);
+          }
+          if (priceB === undefined) {
+            console.log(`Pool ${poolId}: 无法获取 ${tokenB} 的价格`);
+          }
+          
+          // 列出所有可用的代币符号
+          const validTokens = Object.keys(priceRanges).join(', ');
+          console.log(`Pool ${poolId}: 有效的代币符号: ${validTokens}`);
+          
+          // 使用默认LP价格
+          lpTokenPrice = 2.5; // Default price for simulation
+          console.log(`Pool ${poolId}: 使用默认LP价格: ${lpTokenPrice}`);
+        }
+      } else {
+        console.log(`Pool ${poolId}: 没有提供LP代币详情，使用默认LP价格`);
+        lpTokenPrice = 2.5; // Default price for simulation
       }
       
-      // 检查totalStaked是否太小，可能导致除法溢出
-      if (poolInfo.totalStaked.lt(ethers.utils.parseEther("0.0001"))) {
-        console.warn(`Pool ${poolId}: totalStaked值太小，可能导致计算错误，使用安全值`);
-        return usedDefaultValue ? 300 : 800;
-      }
+      // Calculate total staked value
+      const totalStakedLP = parseFloat(ethers.utils.formatEther(poolInfo.totalStaked));
+      const totalStakedValue = totalStakedLP * lpTokenPrice;
+      console.log(`Pool ${poolId}: 总质押价值: ${totalStakedLP} LP = $${totalStakedValue}`);
       
-      // 使用字符串方法进行计算以防止溢出
-      const poolRewardsPerYearStr = ethers.utils.formatEther(poolRewardsPerYear);
-      const totalStakedStr = ethers.utils.formatEther(poolInfo.totalStaked);
+      // Calculate APR: (yearly rewards value / total staked value) * 100%
+      let apr = (yearlyRewardsValue / totalStakedValue) * 100;
       
-      // 计算APR: (年奖励 / 总质押) * 100%
-      const aprCalc = (parseFloat(poolRewardsPerYearStr) / parseFloat(totalStakedStr)) * 100;
-      
-      // 检查APR是否合理 (最大显示为500%)
-      let finalApr = aprCalc;
-      if (isNaN(finalApr) || !isFinite(finalApr)) {
+      // Validate APR but don't cap it artificially
+      if (isNaN(apr) || !isFinite(apr)) {
         console.warn(`Pool ${poolId}: APR计算结果是NaN或Infinity，使用默认值350%`);
-        finalApr = 350;
-      } else if (finalApr > 500 || usedDefaultValue) {
-        console.warn(`Pool ${poolId}: 计算的APR值(${finalApr}%)过高或使用了预估值，限制为最大500%`);
-        finalApr = Math.min(finalApr, 500);
-      } else if (finalApr < 0) {
-        console.warn(`Pool ${poolId}: 计算的APR值(${finalApr}%)为负数，设置为0%`);
-        finalApr = 0;
-      }
+        apr = 350;
+      } else if (apr < 0) {
+        console.warn(`Pool ${poolId}: 计算的APR值(${apr}%)为负数，设置为0%`);
+        apr = 0;
+      } 
+      // 移除1000%的上限，显示真实计算的APR值
       
-      console.log(`Pool ${poolId}: 最终APR: ${finalApr}%`);
-      return finalApr;
+      console.log(`Pool ${poolId}: 最终APR: ${apr}% (AIH价格: ${aihPrice}, LP价格: ${lpTokenPrice})`);
+      return apr;
     } catch (calcError) {
       console.error(`Pool ${poolId}: APR计算出错:`, calcError);
       // 返回合理的默认值

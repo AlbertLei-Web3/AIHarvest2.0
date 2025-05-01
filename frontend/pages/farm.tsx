@@ -41,6 +41,8 @@ import { getTokenBalance, getTokenSymbol, getTokenName } from '@/utils/contracts
 import { ethers } from 'ethers';
 import { FARM_ADDRESS } from '@/constants/addresses';
 import { farmABI } from '@/constants/abis';
+import { TokenSymbol } from '@/utils/priceSimulation';
+import { usePriceSimulation } from '@/hooks/usePriceSimulation';
 
 // Define interfaces
 // 定义接口
@@ -180,6 +182,14 @@ const FarmPage = () => {
   // 从钩子获取账户和语言
   const { address, isConnected } = useAccount();
   const { language } = useLanguage();
+  
+  // Use the price simulation hook
+  // 使用价格模拟钩子
+  const { prices: tokenPrices } = usePriceSimulation((newPrices) => {
+    // This callback runs when prices update
+    console.log("Price update detected, refreshing APRs with new prices:", newPrices);
+    refreshPoolAPRs();
+  });
   
   // Translations for the farm page
   // 农场页面的翻译
@@ -408,23 +418,15 @@ const FarmPage = () => {
   // 获取所有农场池数据
   const fetchPoolsData = async () => {
     try {
-      setIsLoadingPools(true);
-      const pools: FarmPool[] = [];
-      const userPositions: FarmPool[] = [];
-      
-      // Get provider
       if (!window.ethereum) {
-        setIsLoadingPools(false);
+        console.error('No provider found');
         return;
       }
       
-      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
-      const signer = provider.getSigner();
-      const farmContract = getFarmContract(provider);
-      
-      // Get total pool count
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
       const poolCount = await getPoolCount(provider);
-      console.log(`Total pool count: ${poolCount}`);
+      const pools: FarmPool[] = [];
+      const userPositions: FarmPool[] = [];
       
       // Fetch data for each pool
       for (let pid = 0; pid < poolCount; pid++) {
@@ -493,7 +495,11 @@ const FarmPage = () => {
           
           try {
             isLoadingAPR = true;
-            apr = await getPoolAPR(provider, pid);
+            apr = await getPoolAPR(
+              provider, 
+              pid,
+              { tokenA: tokenASymbol, tokenB: tokenBSymbol }
+            );
             isLoadingAPR = false;
             console.log(`Pool ${pid} APR: ${apr}%`);
           } catch (error) {
@@ -511,7 +517,7 @@ const FarmPage = () => {
             
             try {
               // Get user staked amount from the pool
-              const userInfo = await farmContract.getUserInfo(pid, address);
+              const userInfo = await getFarmContract(provider).getUserInfo(pid, address);
               userStaked = ethers.utils.formatEther(userInfo.amount);
               
               // Get pending rewards separately for better reliability
@@ -1085,6 +1091,129 @@ const FarmPage = () => {
     }
   };
   
+  // Refresh APR values for all pools
+  // 刷新所有池子的APR值
+  const refreshPoolAPRs = async () => {
+    try {
+      if (!window.ethereum) return;
+      
+      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      
+      // Update APR for each pool in the farmPools array
+      const updatedPools = await Promise.all(farmPools.map(async (pool) => {
+        // Set loading flag
+        return {
+          ...pool,
+          isLoadingAPR: true
+        };
+      }));
+      
+      // Update state immediately to show loading indicators
+      setFarmPools(updatedPools);
+      
+      // Log the current prices for debugging
+      console.log("Current token prices used for APR calculation:", tokenPrices);
+      
+      // Then calculate actual APRs
+      const finalUpdatedPools = await Promise.all(updatedPools.map(async (pool) => {
+        try {
+          // Get LP token symbol parts to determine the tokens
+          const tokenParts = pool.lpTokenSymbol.split('-');
+          let tokenA: string | undefined;
+          let tokenB: string | undefined;
+          
+          // Extract token symbols from LP token name if possible
+          if (tokenParts.length > 1) {
+            // First token is usually straightforward
+            tokenA = tokenParts[0];
+            
+            // Second token might have various formats like LP suffix
+            // Specially handle known formats
+            if (tokenParts[1] === 'TDLP') {
+              tokenB = 'TD';
+            } else if (tokenParts[1].endsWith('LP')) {
+              // Remove LP suffix if present
+              tokenB = tokenParts[1].replace('LP', '');
+            } else {
+              tokenB = tokenParts[1];
+            }
+            
+            console.log(`Pool ${pool.pid}: 从LP代币符号提取：${tokenA} 和 ${tokenB}`);
+          } else {
+            // Fallback to existing tokenA/tokenB symbols
+            tokenA = pool.tokenASymbol;
+            tokenB = pool.tokenBSymbol;
+            console.log(`Pool ${pool.pid}: 使用预定义的代币符号：${tokenA} 和 ${tokenB}`);
+          }
+          
+          // Make sure token symbols are valid and present in the price data
+          if (tokenA && tokenB) {
+            console.log(`Pool ${pool.pid}: Calculating APR with tokens ${tokenA} and ${tokenB}`);
+            
+            // Check if these tokens have prices in our simulation
+            const validTokenA = Object.keys(tokenPrices).includes(tokenA) ? tokenA : undefined;
+            const validTokenB = Object.keys(tokenPrices).includes(tokenB) ? tokenB : undefined;
+            
+            if (!validTokenA || !validTokenB) {
+              console.warn(`Pool ${pool.pid}: Token symbols not found in price data - ${validTokenA ? '' : tokenA} ${validTokenB ? '' : tokenB}`);
+            }
+            
+            // Get dynamic APR with token details
+            const apr = await getPoolAPR(provider, pool.pid, {
+              tokenA: validTokenA || tokenA,
+              tokenB: validTokenB || tokenB
+            });
+            
+            console.log(`Pool ${pool.pid}: Updated APR to ${apr}%`);
+            
+            return {
+              ...pool,
+              apr,
+              isLoadingAPR: false
+            };
+          } else {
+            console.warn(`Pool ${pool.pid}: Could not determine token symbols`);
+            
+            // Fallback to simple APR calculation
+            const apr = await getPoolAPR(provider, pool.pid);
+            
+            return {
+              ...pool,
+              apr,
+              isLoadingAPR: false
+            };
+          }
+        } catch (error) {
+          console.error(`Error updating APR for pool ${pool.pid}:`, error);
+          return {
+            ...pool,
+            isLoadingAPR: false
+          };
+        }
+      }));
+      
+      setFarmPools(finalUpdatedPools);
+      
+      // Also update user positions if user is connected
+      if (isConnected && address) {
+        const userPositionsWithAPR = userFarmPositions.map(position => {
+          const matchingPool = finalUpdatedPools.find(p => p.pid === position.pid);
+          if (matchingPool) {
+            return {
+              ...position,
+              apr: matchingPool.apr
+            };
+          }
+          return position;
+        });
+        
+        setUserFarmPositions(userPositionsWithAPR);
+      }
+    } catch (error) {
+      console.error('Error refreshing APRs:', error);
+    }
+  };
+  
   // Apply client-side filtering and sorting
   // 应用客户端过滤和排序
   const filteredAndSortedPools = useMemo(() => {
@@ -1131,11 +1260,32 @@ const FarmPage = () => {
     return result;
   }, [farmPools, sortBy, sortDirection, filterOption]);
   
+  // Render the token price displays
+  // 渲染代币价格显示
+  const renderTokenPrices = () => {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-4 p-2 bg-gray-100 dark:bg-gray-800 rounded-lg">
+        {Object.entries(tokenPrices).map(([token, price]) => (
+          <div key={token} className="flex flex-col items-center p-2 bg-white dark:bg-gray-700 rounded shadow">
+            <span className="font-bold text-sm">{token}</span>
+            <span className="text-green-600 dark:text-green-400">${price.toFixed(4)}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
   // Main render function
   // 主渲染函数
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text">{ft('farm')}</h1>
+    <div className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold mb-6">{ft('farm')}</h1>
+      
+      {/* Token Price Section */}
+      <div className="mb-6">
+        <h2 className="text-xl font-semibold mb-2">Token Prices (Simulated)</h2>
+        {renderTokenPrices()}
+      </div>
       
       {!isConnected && (
         <div className="bg-dark-lighter bg-opacity-50 border-l-4 border-primary text-white p-4 mb-6 rounded-md">
@@ -1257,19 +1407,16 @@ const FarmPage = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-gray-400">{ft('apr')}</p>
-                      <p className="font-semibold text-secondary">
-                        {pool.isLoadingAPR ? 
-                          <div className="flex items-center justify-end">
-                            <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
-                            <span>计算中...</span>
-                          </div> :
-                          isNaN(pool.apr) || pool.apr <= 0 ? 
+                      {pool.isLoadingAPR ? (
+                        <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
+                      ) : (
+                        <p className="font-semibold text-secondary">
+                          {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
-                            pool.apr > 500 ?
-                              '500.00%' :  // 最大显示500%
-                              `${pool.apr.toFixed(2)}%`
-                        }
-                      </p>
+                            `${pool.apr.toFixed(2)}%`
+                          }
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -1368,19 +1515,16 @@ const FarmPage = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-gray-400">{ft('apr')}</p>
-                      <p className="font-semibold text-secondary">
-                        {pool.isLoadingAPR ? 
-                          <div className="flex items-center justify-end">
-                            <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
-                            <span>计算中...</span>
-                          </div> :
-                          isNaN(pool.apr) || pool.apr <= 0 ? 
+                      {pool.isLoadingAPR ? (
+                        <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
+                      ) : (
+                        <p className="font-semibold text-secondary">
+                          {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
-                            pool.apr > 500 ?
-                              '500.00%' :  // 最大显示500%
-                              `${pool.apr.toFixed(2)}%`
-                        }
-                      </p>
+                            `${pool.apr.toFixed(2)}%`
+                          }
+                        </p>
+                      )}
                     </div>
                   </div>
                   
@@ -1539,8 +1683,7 @@ const FarmPage = () => {
         </div>
       )}
       
-      {/* Admin Section - Only visible to admin */}
-      {/* 管理员部分 - 仅对管理员可见 */}
+      {/* Admin Panel if isAdmin */}
       {isAdmin && (
         <div className="mt-8 p-4 border border-primary/20 rounded-lg bg-dark-light">
           <h2 className="text-xl font-bold mb-4 text-white">Admin: Manage Farm Pools</h2>
