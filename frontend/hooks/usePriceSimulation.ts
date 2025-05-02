@@ -35,7 +35,8 @@ export function usePriceSimulation(onPriceUpdate?: (prices: Record<TokenSymbol, 
     }
   };
 
-  // Handle price updates
+  // Handle price updates - separating the event handler setup from the price state
+  // 处理价格更新 - 将事件处理程序设置与价格状态分开
   useEffect(() => {
     const handlePriceUpdate = (event: CustomEvent) => {
       const newPrices = event.detail.prices;
@@ -51,17 +52,29 @@ export function usePriceSimulation(onPriceUpdate?: (prices: Record<TokenSymbol, 
 
     window.addEventListener('priceUpdate', handlePriceUpdate as EventListener);
     
+    // Cleanup
+    return () => {
+      window.removeEventListener('priceUpdate', handlePriceUpdate as EventListener);
+    };
+  // Removing prices from dependencies as it causes event handler to be recreated on every price update
+  // 从依赖项中移除prices，防止在每次价格更新时重新创建事件处理程序
+  }, [onPriceUpdate]);
+  
+  // Effect for simulation lifecycle management
+  // 用于模拟生命周期管理的effect
+  useEffect(() => {
     // Start simulation on mount if not already active
     if (!isActive && !simulationId) {
       start();
     }
-
-    // Cleanup
+    
+    // Cleanup on unmount
     return () => {
-      window.removeEventListener('priceUpdate', handlePriceUpdate as EventListener);
-      stop();
+      if (simulationId) {
+        stop();
+      }
     };
-  }, [onPriceUpdate, isActive, simulationId, prices]);
+  }, [isActive, simulationId]);
 
   return {
     prices,

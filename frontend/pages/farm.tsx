@@ -44,6 +44,7 @@ import { farmABI } from '@/constants/abis';
 import { TokenSymbol } from '@/utils/priceSimulation';
 import { usePriceSimulation } from '@/hooks/usePriceSimulation';
 import PriceCarousel from '@/components/PriceCarousel';
+import styles from '@/styles/farm.module.css';
 
 // Define interfaces
 // 定义接口
@@ -205,10 +206,23 @@ const FarmPage = () => {
   
   // Use the price simulation hook
   // 使用价格模拟钩子
+  const [aprUpdateTimer, setAprUpdateTimer] = useState<NodeJS.Timeout | null>(null);
   const { prices: tokenPrices, prevPrices } = usePriceSimulation((newPrices) => {
-    // This callback runs when prices update
-    console.log("Price update detected, refreshing APRs with new prices:", newPrices);
-    refreshPoolAPRs();
+    // This callback runs when prices update - add debounce to prevent too frequent updates
+    console.log("Price update detected, will refresh APRs with debounce");
+    
+    // Clear any existing timer
+    if (aprUpdateTimer) {
+      clearTimeout(aprUpdateTimer);
+    }
+    
+    // Set a new timer with 1000ms delay
+    const timer = setTimeout(() => {
+      console.log("Debounced APR refresh with prices:", newPrices);
+      refreshPoolAPRs();
+    }, 1000);
+    
+    setAprUpdateTimer(timer);
   });
   
   // Translations for the farm page
@@ -416,8 +430,15 @@ const FarmPage = () => {
       }
     }
     
-    return () => setMounted(false);
-  }, [router.isReady, router.query]);
+    return () => {
+      setMounted(false);
+      
+      // Clean up the APR update timer
+      if (aprUpdateTimer) {
+        clearTimeout(aprUpdateTimer);
+      }
+    };
+  }, [router.isReady, router.query, aprUpdateTimer]);
 
   // Sync URL params when sort/filter changes
   // 当排序/筛选更改时同步URL参数
@@ -1362,7 +1383,7 @@ const FarmPage = () => {
       <PriceCarousel 
         prices={tokenPrices} 
         prevPrices={prevPrices} 
-        refreshInterval={5000} 
+        refreshInterval={6000} 
       />
     );
   };
@@ -1370,30 +1391,16 @@ const FarmPage = () => {
   // Main render function
   // 主渲染函数
   return (
-    <div className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-1">{ft('farm')}</h1>
-      
-      {/* Token Price Section - moved up with minimal spacing */}
-      <div className="mb-5">
-        {renderTokenPrices()}
-      </div>
-      
-      {!isConnected && (
-        <div className="bg-dark-lighter bg-opacity-50 border-l-4 border-primary text-white p-4 mb-4 rounded-md">
-          <p>{ft('walletWarning')}</p>
-        </div>
-      )}
+    <div className={styles.container}>
+      {/* Token Price Carousel at top */}
+      {/* 顶部的代币价格轮播 */}
+      {renderTokenPrices()}
       
       {/* Notification component */}
       {/* 通知组件 */}
       {notification && (
-        <div className={`fixed top-20 right-4 p-4 rounded-md shadow-lg z-50 ${
-          notification.type === 'success' ? 'bg-dark-lighter border border-secondary text-secondary' :
-          notification.type === 'error' ? 'bg-dark-lighter border border-red-500 text-red-400' :
-          notification.type === 'info' ? 'bg-dark-lighter border border-blue-500 text-blue-400' :
-          'bg-dark-lighter border border-primary text-primary'
-        }`}>
-          <div className="flex items-center">
+        <div className={`${styles.notification} ${styles[notification.type || 'info']}`}>
+          <div>
             {notification.type === 'success' && <span className="mr-2">✅</span>}
             {notification.type === 'error' && <span className="mr-2">❌</span>}
             {notification.type === 'loading' && <span className="mr-2">⏳</span>}
@@ -1405,13 +1412,13 @@ const FarmPage = () => {
       
       {/* Sort and Filter Controls */}
       {/* 排序和筛选控件 */}
-      <div className="mb-4 flex flex-wrap items-center justify-between bg-dark-lighter p-3 rounded-lg border border-primary/10">
-        <div className="flex items-center space-x-2 mb-2 sm:mb-0">
-          <label className="text-sm text-gray-400">Sort by:</label>
+      <div className={styles.controlsContainer}>
+        <div className={styles.controlGroup}>
+          <label className={styles.controlLabel}>Sort by:</label>
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-white text-black border border-gray-700 rounded px-2 py-1 text-sm"
+            className={styles.select}
           >
             <option value="apr">APR</option>
             <option value="totalStaked">Total Staked</option>
@@ -1421,18 +1428,18 @@ const FarmPage = () => {
           
           <button
             onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
-            className="bg-dark-default text-white border border-gray-700 rounded px-2 py-1 text-sm"
+            className={styles.sortDirectionBtn}
           >
             {sortDirection === 'desc' ? '↓ Desc' : '↑ Asc'}
           </button>
         </div>
         
-        <div className="flex items-center space-x-2">
-          <label className="text-sm text-gray-400">Filter:</label>
+        <div className={styles.controlGroup}>
+          <label className={styles.controlLabel}>Filter:</label>
           <select
             value={filterOption}
             onChange={(e) => setFilterOption(e.target.value as FilterOption)}
-            className="bg-white text-black border border-gray-700 rounded px-2 py-1 text-sm"
+            className={styles.select}
           >
             <option value="all">All Pools</option>
             <option value="stakedOnly">Staked Only</option>
@@ -1442,15 +1449,15 @@ const FarmPage = () => {
       
       {/* Tabs */}
       {/* 标签页 */}
-      <div className="flex border-b border-primary/20 mb-6">
+      <div className={styles.tabsContainer}>
         <button 
-          className={`py-2 px-4 ${activeTab === 'available' ? 'border-b-2 border-secondary text-secondary font-semibold' : 'text-gray-300 hover:text-primary'}`}
+          className={`${styles.tab} ${activeTab === 'available' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('available')}
         >
           {ft('availablePools')}
         </button>
         <button 
-          className={`py-2 px-4 ${activeTab === 'your-farms' ? 'border-b-2 border-secondary text-secondary font-semibold' : 'text-gray-300 hover:text-primary'}`}
+          className={`${styles.tab} ${activeTab === 'your-farms' ? styles.activeTab : ''}`}
           onClick={() => setActiveTab('your-farms')}
         >
           {ft('yourFarms')}
@@ -1460,9 +1467,9 @@ const FarmPage = () => {
       {/* Loading Indicator */}
       {/* 加载指示器 */}
       {isLoadingPools && (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-          <span className="ml-3 text-white">Loading pools...</span>
+        <div className={styles.loadingContainer}>
+          <div className={styles.loadingSpinner}></div>
+          <span className={styles.loadingText}>Loading pools...</span>
         </div>
       )}
       
@@ -1471,29 +1478,29 @@ const FarmPage = () => {
       {activeTab === 'available' && !isLoadingPools && (
         <div>
           {filteredAndSortedPools.length === 0 ? (
-            <div className="text-center py-8 text-gray-300">
+            <div className={styles.emptyMessage}>
               No pools found matching your filters
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className={styles.poolsContainer}>
               {filteredAndSortedPools.map((pool) => (
-                <div key={pool.pid} className="bg-dark-lighter rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-dark-default rounded-full flex items-center justify-center mr-3 border border-gray-700">
-                        <span className="text-sm font-semibold text-white">{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
+                <div key={pool.pid} className={styles.poolCard}>
+                  <div className={styles.poolHeader}>
+                    <div className={styles.poolInfo}>
+                      <div className={styles.poolIcon}>
+                        <span className={styles.poolSymbol}>{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-white">{pool.lpTokenName}</h3>
-                        <p className="text-sm text-gray-400">{pool.lpTokenSymbol}</p>
+                      <div className={styles.poolDetails}>
+                        <h3 className={styles.poolName}>{pool.lpTokenName}</h3>
+                        <p className={styles.poolTokenSymbol}>{pool.lpTokenSymbol}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-400">{ft('apr')}</p>
+                    <div className={styles.aprContainer}>
+                      <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
+                        <p className={styles.aprLoading}>Loading...</p>
                       ) : (
-                        <p className="font-semibold text-emerald-500">
+                        <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
                             `${pool.apr.toFixed(2)}%`
@@ -1503,38 +1510,38 @@ const FarmPage = () => {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-gray-400">{ft('totalStaked')}</p>
-                      <p className="font-semibold text-white">{parseFloat(pool.totalStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
+                  <div className={styles.statsGrid}>
+                    <div className={styles.statItem}>
+                      <p className={styles.statLabel}>{ft('totalStaked')}</p>
+                      <p className={styles.statValue}>{parseFloat(pool.totalStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-400">{ft('walletBalance')}</p>
-                      <p className="font-semibold text-white">{parseFloat(pool.userBalance).toFixed(4)} {pool.lpTokenSymbol}</p>
+                    <div className={styles.statItem}>
+                      <p className={styles.statLabel}>{ft('walletBalance')}</p>
+                      <p className={styles.statValue}>{parseFloat(pool.userBalance).toFixed(4)} {pool.lpTokenSymbol}</p>
                     </div>
                   </div>
                   
                   {parseFloat(pool.userStaked) > 0 && (
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <p className="text-sm text-gray-400">{ft('stakedAmount')}</p>
-                        <p className="font-semibold text-white">{parseFloat(pool.userStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
+                    <div className={styles.statsGrid}>
+                      <div className={styles.statItem}>
+                        <p className={styles.statLabel}>{ft('stakedAmount')}</p>
+                        <p className={styles.statValue}>{parseFloat(pool.userStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
                       </div>
-                      <div>
-                        <p className="text-sm text-gray-400">{ft('pendingRewards')}</p>
+                      <div className={styles.statItem}>
+                        <p className={styles.statLabel}>{ft('pendingRewards')}</p>
                         {isLoadingRewards ? (
                           <div className="flex items-center">
                             <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
                             <span className="text-secondary">Loading...</span>
                           </div>
                         ) : (
-                          <div className="flex items-center">
-                            <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                          <div className={styles.rewardsContainer}>
+                            <p className={styles.rewardsValue}>{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
                             {/* Refresh Rewards Button moved inline with small gap */}
                             <button
                               onClick={() => refreshPoolRewards(pool.pid)}
                               disabled={isLoadingRewards}
-                              className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-0.5 text-xs font-semibold transition-all ml-2"
+                              className={styles.refreshButton}
                             >
                               {isLoadingRewards ? '...' : 'Refresh'}
                             </button>
@@ -1544,9 +1551,9 @@ const FarmPage = () => {
                     </div>
                   )}
                   
-                  <div className="flex justify-between">
+                  <div className={styles.actionsContainer}>
                     <button 
-                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                      className={styles.actionButton}
                       onClick={() => openDepositModal(pool)}
                       disabled={!isConnected}
                     >
@@ -1556,7 +1563,7 @@ const FarmPage = () => {
                     {parseFloat(pool.userStaked) > 0 && (
                       <>
                         <button 
-                          className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                          className={styles.actionButton}
                           onClick={() => openWithdrawModal(pool)}
                           disabled={!isConnected || isWithdrawing}
                         >
@@ -1564,7 +1571,7 @@ const FarmPage = () => {
                         </button>
                         
                         <button 
-                          className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                          className={styles.actionButton}
                           onClick={() => handleHarvest(pool)}
                           disabled={isHarvesting || parseFloat(pool.pendingRewards) <= 0 || pendingTx.type === 'harvest'}
                         >
@@ -1585,33 +1592,33 @@ const FarmPage = () => {
       {activeTab === 'your-farms' && !isLoadingPools && (
         <div>
           {!isConnected ? (
-            <div className="bg-dark-lighter bg-opacity-50 border-l-4 border-primary text-white p-4 rounded-md">
+            <div className={styles.warningMessage}>
               <p>{ft('walletWarning')}</p>
             </div>
           ) : userFarmPositions.length === 0 ? (
-            <div className="text-center py-8 text-gray-300">
+            <div className={styles.emptyMessage}>
               {ft('noPositions')}
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className={styles.poolsContainer}>
               {userFarmPositions.map((pool) => (
-                <div key={pool.pid} className="bg-dark-lighter rounded-lg shadow-md p-4 border border-primary/10 hover:border-primary/30 transition-colors">
-                  <div className="flex justify-between items-center mb-4">
-                    <div className="flex items-center">
-                      <div className="w-10 h-10 bg-dark-default rounded-full flex items-center justify-center mr-3 border border-gray-700">
-                        <span className="text-sm font-semibold text-white">{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
+                <div key={pool.pid} className={styles.poolCard}>
+                  <div className={styles.poolHeader}>
+                    <div className={styles.poolInfo}>
+                      <div className={styles.poolIcon}>
+                        <span className={styles.poolSymbol}>{pool.tokenASymbol}/{pool.tokenBSymbol}</span>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-white">{pool.lpTokenName}</h3>
-                        <p className="text-sm text-gray-400">{pool.lpTokenSymbol}</p>
+                      <div className={styles.poolDetails}>
+                        <h3 className={styles.poolName}>{pool.lpTokenName}</h3>
+                        <p className={styles.poolTokenSymbol}>{pool.lpTokenSymbol}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm text-gray-400">{ft('apr')}</p>
+                    <div className={styles.aprContainer}>
+                      <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className="text-lg font-bold text-blue-500 animate-pulse">Loading...</p>
+                        <p className={styles.aprLoading}>Loading...</p>
                       ) : (
-                        <p className="font-semibold text-emerald-500">
+                        <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
                             `${pool.apr.toFixed(2)}%`
@@ -1621,26 +1628,26 @@ const FarmPage = () => {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <p className="text-sm text-gray-400">{ft('stakedAmount')}</p>
-                      <p className="font-semibold text-white">{parseFloat(pool.userStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
+                  <div className={styles.statsGrid}>
+                    <div className={styles.statItem}>
+                      <p className={styles.statLabel}>{ft('stakedAmount')}</p>
+                      <p className={styles.statValue}>{parseFloat(pool.userStaked).toFixed(4)} {pool.lpTokenSymbol}</p>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-400">{ft('pendingRewards')}</p>
+                    <div className={styles.statItem}>
+                      <p className={styles.statLabel}>{ft('pendingRewards')}</p>
                       {isLoadingRewards ? (
                         <div className="flex items-center">
                           <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
                           <span className="text-secondary">Loading...</span>
                         </div>
                       ) : (
-                        <div className="flex items-center">
-                          <p className="font-semibold text-secondary">{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
+                        <div className={styles.rewardsContainer}>
+                          <p className={styles.rewardsValue}>{parseFloat(pool.pendingRewards).toFixed(4)} AIH</p>
                           {/* Refresh Rewards Button moved inline with small gap */}
                           <button
                             onClick={() => refreshPoolRewards(pool.pid)}
                             disabled={isLoadingRewards}
-                            className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white rounded px-2 py-0.5 text-xs font-semibold transition-all ml-2"
+                            className={styles.refreshButton}
                           >
                             {isLoadingRewards ? '...' : 'Refresh'}
                           </button>
@@ -1649,16 +1656,16 @@ const FarmPage = () => {
                     </div>
                   </div>
                   
-                  <div className="flex justify-between">
+                  <div className={styles.actionsContainer}>
                     <button 
-                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                      className={styles.actionButton}
                       onClick={() => openDepositModal(pool)}
                     >
                       {ft('deposit')}
                     </button>
                     
                     <button 
-                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                      className={styles.actionButton}
                       onClick={() => openWithdrawModal(pool)}
                       disabled={isWithdrawing}
                     >
@@ -1666,7 +1673,7 @@ const FarmPage = () => {
                     </button>
                     
                     <button 
-                      className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                      className={styles.actionButton}
                       onClick={() => handleHarvest(pool)}
                       disabled={isHarvesting || parseFloat(pool.pendingRewards) <= 0 || pendingTx.type === 'harvest'}
                     >
@@ -1683,23 +1690,23 @@ const FarmPage = () => {
       {/* Deposit Modal */}
       {/* 存入模态框 */}
       {showDepositModal && selectedPool && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-          <div className="bg-dark-light rounded-lg p-6 max-w-md w-full border border-primary/20">
-            <h2 className="text-xl font-semibold mb-4 text-white">{ft('deposit')} {selectedPool.lpTokenSymbol}</h2>
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h2 className={styles.modalTitle}>{ft('deposit')} {selectedPool.lpTokenSymbol}</h2>
             
-            <div className="mb-4">
-              <p className="text-sm text-gray-400 mb-1">{ft('walletBalance')}: {parseFloat(selectedPool.userBalance).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
+            <div className={styles.modalContent}>
+              <p className={styles.balanceInfo}>{ft('walletBalance')}: {parseFloat(selectedPool.userBalance).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className={styles.inputContainer}>
                 <input
                   type="number"
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
+                  className={styles.input}
                 />
                 <button
-                  className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
+                  className={styles.maxButton}
                   onClick={handleMaxDeposit}
                 >
                   {ft('max')}
@@ -1707,9 +1714,9 @@ const FarmPage = () => {
               </div>
             </div>
             
-            <div className="flex justify-between mt-6">
+            <div className={styles.modalActions}>
               <button
-                className="bg-dark-default hover:bg-dark-light text-white px-4 py-2 rounded-md border border-gray-700 transition-colors"
+                className={styles.cancelButton}
                 onClick={() => setShowDepositModal(false)}
               >
                 {ft('cancel')}
@@ -1718,7 +1725,7 @@ const FarmPage = () => {
               {parseFloat(selectedPool.userBalance) > 0 && (
                 <>
                   <button
-                    className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                    className={styles.actionButton}
                     onClick={handleApprove}
                     disabled={isApproving}
                   >
@@ -1726,7 +1733,7 @@ const FarmPage = () => {
                   </button>
                   
                   <button
-                    className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                    className={styles.actionButton}
                     onClick={handleDeposit}
                     disabled={isDepositing || !depositAmount || parseFloat(depositAmount) <= 0 || parseFloat(depositAmount) > parseFloat(selectedPool.userBalance)}
                   >
@@ -1742,23 +1749,23 @@ const FarmPage = () => {
       {/* Withdraw Modal */}
       {/* 提取模态框 */}
       {showWithdrawModal && selectedPool && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
-          <div className="bg-dark-light rounded-lg p-6 max-w-md w-full border border-primary/20">
-            <h2 className="text-xl font-semibold mb-4 text-white">{ft('withdraw')} {selectedPool.lpTokenSymbol}</h2>
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <h2 className={styles.modalTitle}>{ft('withdraw')} {selectedPool.lpTokenSymbol}</h2>
             
-            <div className="mb-4">
-              <p className="text-sm text-gray-400 mb-1">{ft('stakedAmount')}: {parseFloat(selectedPool.userStaked).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
+            <div className={styles.modalContent}>
+              <p className={styles.balanceInfo}>{ft('stakedAmount')}: {parseFloat(selectedPool.userStaked).toFixed(4)} {selectedPool.lpTokenSymbol}</p>
               
-              <div className="flex items-center border border-gray-700 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary">
+              <div className={styles.inputContainer}>
                 <input
                   type="number"
                   value={withdrawAmount}
                   onChange={(e) => setWithdrawAmount(e.target.value)}
                   placeholder="0.0"
-                  className="flex-1 p-2 outline-none bg-white text-black placeholder-gray-500"
+                  className={styles.input}
                 />
                 <button
-                  className="bg-dark-lightest px-3 py-1 text-sm text-secondary hover:bg-dark-light transition-colors"
+                  className={styles.maxButton}
                   onClick={handleMaxWithdraw}
                 >
                   {ft('max')}
@@ -1766,16 +1773,16 @@ const FarmPage = () => {
               </div>
             </div>
             
-            <div className="flex justify-between mt-6">
+            <div className={styles.modalActions}>
               <button
-                className="bg-dark-default hover:bg-dark-light text-white px-4 py-2 rounded-md border border-gray-700 transition-colors"
+                className={styles.cancelButton}
                 onClick={() => setShowWithdrawModal(false)}
               >
                 {ft('cancel')}
               </button>
               
               <button
-                className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                className={styles.actionButton}
                 onClick={handleWithdraw}
                 disabled={isWithdrawing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > parseFloat(selectedPool.userStaked)}
               >
@@ -1788,11 +1795,11 @@ const FarmPage = () => {
       
       {/* Admin Panel if isAdmin */}
       {isAdmin && (
-        <div className="mt-8 p-4 border border-primary/20 rounded-lg bg-dark-lighter">
-          <h2 className="text-xl font-bold mb-4 text-white">{ft('adminManagePools')}</h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1 text-gray-300">{ft('lpTokenAddress')}</label>
-            <div className="flex">
+        <div className={styles.adminPanel}>
+          <h2 className={styles.adminTitle}>{ft('adminManagePools')}</h2>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>{ft('lpTokenAddress')}</label>
+            <div className={styles.inputGroup}>
               <input
                 type="text"
                 value={newLpToken}
@@ -1802,10 +1809,10 @@ const FarmPage = () => {
                   setLpTokenStatus({ checked: false, isInFarm: false });
                 }}
                 placeholder="0x..."
-                className="flex-1 p-2 border border-gray-700 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white text-black"
+                className={styles.adminInput}
               />
               <button
-                className="ml-2 bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all font-semibold"
+                className={styles.checkButton}
                 onClick={checkLpTokenStatus}
                 disabled={!newLpToken || !ethers.utils.isAddress(newLpToken)}
               >
@@ -1815,7 +1822,7 @@ const FarmPage = () => {
           </div>
           
           {lpTokenStatus.checked && (
-            <div className="mb-4 p-2 border rounded-md bg-dark-default border-gray-700 text-white">
+            <div className={styles.statusBox}>
               <p>
                 {ft('statusInFarm')}: {lpTokenStatus.isInFarm 
                   ? `${ft('alreadyInFarm')}${lpTokenStatus.poolId}${
@@ -1832,22 +1839,22 @@ const FarmPage = () => {
             </div>
           )}
           
-          <div className="mb-4">
-            <label className="block text-sm font-medium mb-1 text-gray-300">{ft('allocPoints')}</label>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>{ft('allocPoints')}</label>
             <input
               type="number"
               value={allocPoint}
               onChange={(e) => setAllocPoint(e.target.value)}
               placeholder="100"
-              className="w-full p-2 border border-gray-700 rounded-md focus:ring-2 focus:ring-primary/50 focus:border-primary bg-white text-black"
+              className={styles.adminInput}
             />
           </div>
           
-          <div className="flex space-x-2">
+          <div className={styles.adminButtonsContainer}>
             {lpTokenStatus.isInFarm ? (
               <>
                 <button
-                  className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all font-semibold"
+                  className={styles.updateButton}
                   onClick={handleUpdatePool}
                   disabled={isAddingPool || isUpdatingPool || isDeletingPool}
                 >
@@ -1855,7 +1862,7 @@ const FarmPage = () => {
                 </button>
                 
                 <button
-                  className="bg-red-900/30 hover:bg-red-900/50 text-red-400 px-4 py-2 rounded-md transition-colors"
+                  className={styles.disableButton}
                   onClick={handleDisablePool}
                   disabled={isAddingPool || isUpdatingPool || isDeletingPool}
                 >
@@ -1864,7 +1871,7 @@ const FarmPage = () => {
               </>
             ) : (
               <button
-                className="bg-gradient-to-r from-primary to-secondary hover:shadow-glow text-white px-4 py-2 rounded-md transition-all"
+                className={styles.updateButton}
                 onClick={handleAddLpToken}
                 disabled={isAddingPool || isUpdatingPool || isDeletingPool || !newLpToken || !ethers.utils.isAddress(newLpToken)}
               >
@@ -1873,7 +1880,7 @@ const FarmPage = () => {
             )}
           </div>
           
-          <div className="mt-4 text-sm text-gray-400">
+          <div className={styles.adminNotes}>
             <p>{ft('adminNote1')}</p>
             <p>{ft('adminNote2')}</p>
           </div>

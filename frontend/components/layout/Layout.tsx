@@ -9,28 +9,17 @@ interface LayoutProps {
   children: ReactNode;
 }
 
-// Background component with animations and particles
+// Background component with animations
 const PageBackground: React.FC = () => {
   return (
     <div className={styles.backgroundContainer}>
-      {/* Gradient Background */}
       <div className={styles.gradientBackground}></div>
-      
-      {/* Animated circles/orbs */}
       <div className={styles.backgroundOrb1}></div>
       <div className={styles.backgroundOrb2}></div>
       <div className={styles.backgroundOrb3}></div>
-      
-      {/* Animated grid pattern */}
       <div className={styles.gridPattern}></div>
-      
-      {/* Wave Animation - Bottom */}
       <div className={styles.bottomWave}></div>
-      
-      {/* Wave Animation - Bottom (Reverse) */}
       <div className={styles.bottomWaveReverse}></div>
-      
-      {/* Subtle stars/particles */}
       <div className="stars absolute inset-0"></div>
     </div>
   );
@@ -47,12 +36,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   return (
     <LanguageProvider>
       <div className={styles.layoutContainer}>
-        {/* Background Component */}
         <PageBackground />
-        
         <Header />
         <div className={styles.mainContent}>
-          {/* Only show children if connected to the correct network or show a placeholder message */}
           {isCorrectNetwork ? children : (
             <div className={styles.errorContainer}>
               <h2 className="text-2xl font-bold mb-4 gradient-text">Network Connection Required</h2>

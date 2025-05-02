@@ -16,6 +16,7 @@ import { getTokenBalance, approveToken, getTokenContract } from '@/utils/contrac
 import { getRouterContract, getPairReserves, createTokenPair } from '@/utils/contracts/router';
 import { ethers } from 'ethers';
 import { useRouter } from 'next/router';
+import styles from '@/styles/liquidity.module.css';
 
 interface Token {
   name: string;
@@ -83,8 +84,6 @@ interface LiquidityTranslation {
   approving: string;
   addingLiquidity: string;
   processing: string;
-  initialLiquidityWarning: string;
-  initialLiquidityWarningText: string;
   pairAddress: string;
   copy: string;
   lpTokenBalance: string;
@@ -241,8 +240,6 @@ const LiquidityPage = () => {
       approving: 'Approving',
       addingLiquidity: 'Adding liquidity',
       processing: 'Processing',
-      initialLiquidityWarning: 'Minimum Initial Liquidity Required',
-      initialLiquidityWarningText: 'For new pools, you must provide enough tokens so that the square root of (amount1 × amount2) is at least 1000. The recommended minimum is 5000 of each token for a new pool. Add enough liquidity to meet this requirement, otherwise the transaction will fail.',
       pairAddress: 'Pair Address',
       copy: 'Copy',
       lpTokenBalance: 'LP Token Balance',
@@ -284,8 +281,6 @@ const LiquidityPage = () => {
       approving: '正在批准',
       addingLiquidity: '正在添加流动性',
       processing: '处理中',
-      initialLiquidityWarning: '初始流动性警告',
-      initialLiquidityWarningText: '创建新的流动性池时，需要提供足够的代币作为初始LP代币。代币数量的乘积必须足够高。',
       pairAddress: '交易对地址',
       copy: '复制',
       lpTokenBalance: 'LP代币余额',
@@ -1853,19 +1848,19 @@ const LiquidityPage = () => {
   } | null>(null);
   const router = useRouter();
   
-  // Add the notification component to the return section
+  // Return section updated to use CSS modules
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className={styles.container}>
       {/* 全局通知组件 */}
       {showNotification && (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
-          <div className={`max-w-md w-full p-4 rounded-lg shadow-xl border ${
-            notificationType === 'success' ? 'bg-green-900/80 border-green-500' : 
-            notificationType === 'error' ? 'bg-red-900/80 border-red-500' : 
-            'bg-blue-900/80 border-blue-500'
+        <div className={styles.notificationContainer}>
+          <div className={`${styles.notification} ${
+            notificationType === 'success' ? styles.success : 
+            notificationType === 'error' ? styles.error : 
+            styles.loading
           }`}>
-            <div className="flex items-start">
-              <div className="flex-shrink-0 pt-0.5">
+            <div className={styles.notificationContent}>
+              <div className={styles.notificationIcon}>
                 {notificationType === 'success' && (
                   <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1879,46 +1874,40 @@ const LiquidityPage = () => {
                 )}
                 
                 {notificationType === 'loading' && (
-                  <svg className="animate-spin h-6 w-6 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className={`h-6 w-6 text-blue-400 ${styles.spinner}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
                 )}
               </div>
               
-              <div className="ml-3 w-0 flex-1">
-                <p className={`text-sm font-medium ${
-                  notificationType === 'success' ? 'text-green-200' : 
-                  notificationType === 'error' ? 'text-red-200' : 
-                  'text-blue-200'
+              <div className={styles.notificationBody}>
+                <p className={`${
+                  notificationType === 'success' ? styles.successType : 
+                  notificationType === 'error' ? styles.errorType : 
+                  styles.loadingType
                 }`}>
                   {notificationType === 'success' ? lt('success') : 
                    notificationType === 'error' ? lt('error') : 
                    lt('processing')}
                 </p>
-                <p className={`mt-1 text-sm break-all break-words ${
-                  notificationType === 'success' ? 'text-green-300' : 
-                  notificationType === 'error' ? 'text-red-300' : 
-                  'text-blue-300'
+                <p className={`${
+                  notificationType === 'success' ? styles.successMessage : 
+                  notificationType === 'error' ? styles.errorMessage : 
+                  styles.loadingMessage
                 }`}>
                   {notificationMessage}
                 </p>
               </div>
               
-              <div className="ml-4 flex-shrink-0 flex">
-                <button
-                  onClick={closeNotification}
-                  className={`inline-flex rounded-md p-1.5 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                    notificationType === 'success' ? 'text-green-400 hover:text-green-300 focus:ring-green-500' : 
-                    notificationType === 'error' ? 'text-red-400 hover:text-red-300 focus:ring-red-500' : 
-                    'text-blue-400 hover:text-blue-300 focus:ring-blue-500'
-                  }`}
-                >
-                  <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+              <button
+                onClick={closeNotification}
+                className={styles.closeNotificationBtn}
+              >
+                <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -1926,10 +1915,10 @@ const LiquidityPage = () => {
 
       <div className="max-w-md mx-auto">
         {/* Add Liquidity Card */}
-        <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-white">{lt('addLiquidity')}</h1>
-            <div className="text-gray-400 cursor-pointer">
+        <div className={styles.liquidityCard}>
+          <div className={styles.cardHeader}>
+            <h1 className={styles.cardTitle}>{lt('addLiquidity')}</h1>
+            <div className={styles.settingsButton}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -1937,28 +1926,11 @@ const LiquidityPage = () => {
             </div>
           </div>
           
-          {/* Minimum Liquidity Warning */}
-          <div className="bg-yellow-900/40 border border-yellow-600/50 rounded-lg p-4 mb-4 text-yellow-200 text-sm">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="font-medium">{lt('initialLiquidityWarning')}</h3>
-                <div className="mt-2">
-                  <p>{lt('initialLiquidityWarningText')}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
           {/* Token A input */}
-          <div className="mb-4">
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-400">{lt('tokenA')}</span>
-              <span className="text-sm text-gray-400">
+          <div className={styles.inputContainer}>
+            <div className={styles.inputHeader}>
+              <span className={styles.inputLabel}>{lt('tokenA')}</span>
+              <span className={styles.balanceText}>
                 {!mounted ? lt('connectWallet') : (
                   isConnected 
                     ? `${lt('balance')}: ${tokens[tokenA].balance} ${tokens[tokenA].symbol}`
@@ -1966,22 +1938,22 @@ const LiquidityPage = () => {
                 )}
               </span>
             </div>
-            <div className="flex items-center bg-dark-default rounded-lg p-3 border border-gray-700">
+            <div className={styles.inputWrapper}>
               <input
                 type="number"
                 placeholder="0.0"
-                className="w-full bg-transparent outline-none text-2xl text-white"
+                className={styles.tokenInput}
                 value={tokenAAmount}
                 onChange={(e) => setTokenAAmount(e.target.value)}
               />
               <div 
-                className="flex items-center space-x-2 bg-dark-lightest rounded-lg px-3 py-2 hover:bg-dark-light transition cursor-pointer"
+                className={styles.tokenSelector}
                 onClick={() => {
                   setCurrentSelector('tokenA');
                   setShowTokenModal(true);
                 }}
               >
-                <span className="font-medium text-white mr-1">{tokens[tokenA].symbol}</span>
+                <span className={styles.tokenSymbol}>{tokens[tokenA].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -1990,19 +1962,19 @@ const LiquidityPage = () => {
           </div>
           
           {/* Plus sign */}
-          <div className="flex justify-center my-4">
-            <div className="w-10 h-10 bg-dark-lighter rounded-full flex items-center justify-center shadow-md border border-primary/20">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <div className={styles.plusSign}>
+            <div className={styles.plusButton}>
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </div>
           </div>
           
           {/* Token B input */}
-          <div className="mb-4">
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-400">{lt('tokenB')}</span>
-              <span className="text-sm text-gray-400">
+          <div className={styles.inputContainer}>
+            <div className={styles.inputHeader}>
+              <span className={styles.inputLabel}>{lt('tokenB')}</span>
+              <span className={styles.balanceText}>
                 {!mounted ? lt('connectWallet') : (
                   isConnected 
                     ? `${lt('balance')}: ${tokens[tokenB].balance} ${tokens[tokenB].symbol}`
@@ -2010,22 +1982,22 @@ const LiquidityPage = () => {
                 )}
               </span>
             </div>
-            <div className="flex items-center bg-dark-default rounded-lg p-3 border border-gray-700">
+            <div className={styles.inputWrapper}>
               <input
                 type="number"
                 placeholder="0.0"
-                className="w-full bg-transparent outline-none text-2xl text-white"
+                className={styles.tokenInput}
                 value={tokenBAmount}
                 onChange={(e) => setTokenBAmount(e.target.value)}
               />
               <div 
-                className="flex items-center space-x-2 bg-dark-lightest rounded-lg px-3 py-2 hover:bg-dark-light transition cursor-pointer"
+                className={styles.tokenSelector}
                 onClick={() => {
                   setCurrentSelector('tokenB');
                   setShowTokenModal(true);
                 }}
               >
-                <span className="font-medium text-white mr-1">{tokens[tokenB].symbol}</span>
+                <span className={styles.tokenSymbol}>{tokens[tokenB].symbol}</span>
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
@@ -2035,19 +2007,17 @@ const LiquidityPage = () => {
           
           {/* LP Token Info */}
           {showLpInfo && (
-            <div className="bg-dark-default rounded-lg p-4 mb-4 border border-gray-700">
-              <h3 className="font-medium text-white mb-2">{lt('lpTokensReceive')}</h3>
-              <div className="flex items-center">
-                <div className="bg-dark-lightest px-3 py-1 rounded-lg">
-                  <span className="text-white font-medium">{tokens[tokenA].symbol}-{tokens[tokenB].symbol}</span>
+            <div className={styles.infoBox}>
+              <h3 className={styles.infoTitle}>{lt('lpTokensReceive')}</h3>
+              <div className={styles.lpTokenInfo}>
+                <div className={styles.pairName}>
+                  <span>{tokens[tokenA].symbol}-{tokens[tokenB].symbol}</span>
                 </div>
-                <span className="ml-4 text-white">{lpAmount} LP</span>
+                <span className={styles.lpAmount}>{lpAmount} LP</span>
               </div>
-              <div className="mt-2 text-sm text-gray-400">
-                <div className="flex justify-between">
-                  <span>{lt('shareOfPool')}</span>
-                  <span>{poolShare}</span>
-                </div>
+              <div className={styles.poolShareInfo}>
+                <span>{lt('shareOfPool')}</span>
+                <span>{poolShare}</span>
               </div>
             </div>
           )}
@@ -2062,14 +2032,10 @@ const LiquidityPage = () => {
               {lt('walletWarning')}
             </div>
           ) : (
-            <div className="flex flex-col space-y-2">
-              <div className="flex space-x-2">
+            <div className={styles.buttonGroup}>
+              <div className={styles.approveBtnRow}>
                 <button 
-                  className={`flex-1 py-3 rounded-lg font-bold text-white ${
-                    isApprovingA || transactionPending
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
-                  }`}
+                  className={styles.approveBtn}
                   onClick={handleApproveTokenA}
                   disabled={isApprovingA || transactionPending || !tokenAAmount}
                 >
@@ -2077,11 +2043,7 @@ const LiquidityPage = () => {
                 </button>
                 
                 <button 
-                  className={`flex-1 py-3 rounded-lg font-bold text-white ${
-                    isApprovingB || transactionPending
-                      ? 'bg-gray-600 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
-                  }`}
+                  className={styles.approveBtn}
                   onClick={handleApproveTokenB}
                   disabled={isApprovingB || transactionPending || !tokenBAmount}
                 >
@@ -2090,11 +2052,7 @@ const LiquidityPage = () => {
               </div>
               
               <button 
-                className={`w-full py-3 rounded-lg font-bold text-white ${
-                  !tokenAAmount || !tokenBAmount || isAddingLiquidity || transactionPending
-                    ? 'bg-gray-600 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-primary to-secondary hover:shadow-glow transition-all'
-                }`}
+                className={styles.actionBtn}
                 onClick={handleAddLiquidity}
                 disabled={!tokenAAmount || !tokenBAmount || isAddingLiquidity || transactionPending}
               >
@@ -2105,53 +2063,51 @@ const LiquidityPage = () => {
         </div>
         
         {/* My Liquidity Positions */}
-        <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg border border-primary/10">
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">{lt('myLiquidityPositions')}</h2>
-              <button 
-                className="text-sm bg-blue-900/30 text-blue-400 px-3 py-1 rounded hover:bg-blue-900/50 transition"
-                onClick={async () => {
-                  try {
-                    await refreshPositions();
-                  } catch (err: any) {
-                    console.error("Error refreshing positions:", err);
-                  }
-                }}
-              >
-                <div className="flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Refresh
-                </div>
-              </button>
-            </div>
-            <div className="flex space-x-2 mb-4">
-              <button 
-                className="text-xs bg-purple-900/30 text-purple-400 px-2 py-1 rounded hover:bg-purple-900/50 transition flex items-center"
-                onClick={reconnectAndRefresh}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+        <div className={styles.positionsCard}>
+          <div className={styles.positionsHeader}>
+            <h2 className={styles.cardTitle}>{lt('myLiquidityPositions')}</h2>
+            <button 
+              className={styles.refreshButton}
+              onClick={async () => {
+                try {
+                  await refreshPositions();
+                } catch (err: any) {
+                  console.error("Error refreshing positions:", err);
+                }
+              }}
+            >
+              <div className="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                Reconnect Wallet
-              </button>
-              <button 
-                className="text-xs bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50 transition flex items-center"
-                onClick={forceResetWalletAndContract}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                Force Reset
-              </button>
-            </div>
+                Refresh
+              </div>
+            </button>
+          </div>
+          <div className={styles.utilityBtnGroup}>
+            <button 
+              className={styles.reconnectBtn}
+              onClick={reconnectAndRefresh}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              Reconnect Wallet
+            </button>
+            <button 
+              className={styles.resetBtn}
+              onClick={forceResetWalletAndContract}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              Force Reset
+            </button>
           </div>
           
           {positions.length === 0 ? (
-            <div className="text-center py-8 bg-dark-default rounded-lg">
-              <p className="text-gray-400">{lt('noPositions')}</p>
+            <div className={styles.emptyPositions}>
+              <p>{lt('noPositions')}</p>
             </div>
           ) : (
             <div>
@@ -2161,47 +2117,45 @@ const LiquidityPage = () => {
                 const tokenBObj = findTokenByAddress(position.tokenB);
                 
                 return (
-                  <div key={index} className="border border-gray-700 rounded-lg p-4 mb-3 bg-dark-default">
-                    <div className="flex justify-between mb-2">
-                      <div className="flex items-center">
-                        <div className="bg-dark-lightest px-3 py-1 rounded-lg mr-2">
-                          <span className="text-white font-medium">{position.tokenASymbol}-{position.tokenBSymbol}</span>
-                        </div>
+                  <div key={index} className={styles.positionItem}>
+                    <div className={styles.positionHeader}>
+                      <div className={styles.positionPair}>
+                        <span>{position.tokenASymbol}-{position.tokenBSymbol}</span>
                       </div>
-                      <div className="flex space-x-2">
+                      <div className={styles.positionBtnGroup}>
                         <button 
-                          className="text-sm bg-blue-900/30 text-blue-400 px-2 py-1 rounded hover:bg-blue-900/50 transition"
+                          className={styles.addBtn}
                           onClick={() => handleAddToPosition(position)}
                         >
                           {lt('add')}
                         </button>
                         <button 
-                          className="text-sm bg-red-900/30 text-red-400 px-2 py-1 rounded hover:bg-red-900/50 transition"
+                          className={styles.removeBtn}
                           onClick={() => handleRemoveLiquidity(position)}
                         >
                           {lt('remove')}
                         </button>
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-2 text-sm mb-2">
-                      <div>
-                        <div className="text-gray-400">{lt('pooled')} {position.tokenASymbol}</div>
-                        <div className="text-white">{formatTokenAmount(position.tokenAAmount)} {position.tokenASymbol}</div>
+                    <div className={styles.positionGrid}>
+                      <div className={styles.positionData}>
+                        <div className={styles.dataLabel}>{lt('pooled')} {position.tokenASymbol}</div>
+                        <div className={styles.dataValue}>{formatTokenAmount(position.tokenAAmount)} {position.tokenASymbol}</div>
                       </div>
-                      <div>
-                        <div className="text-gray-400">{lt('pooled')} {position.tokenBSymbol}</div>
-                        <div className="text-white">{formatTokenAmount(position.tokenBAmount)} {position.tokenBSymbol}</div>
+                      <div className={styles.positionData}>
+                        <div className={styles.dataLabel}>{lt('pooled')} {position.tokenBSymbol}</div>
+                        <div className={styles.dataValue}>{formatTokenAmount(position.tokenBAmount)} {position.tokenBSymbol}</div>
                       </div>
-                      <div>
-                        <div className="text-gray-400">{lt('yourShare')}</div>
-                        <div className="text-white">{(position.poolShare).toFixed(2)}%</div>
+                      <div className={styles.positionData}>
+                        <div className={styles.dataLabel}>{lt('yourShare')}</div>
+                        <div className={styles.dataValue}>{(position.poolShare).toFixed(2)}%</div>
                       </div>
                     </div>
-                    <div className="mt-1 pt-1 border-t border-gray-700">
-                      <div className="flex justify-between items-center mt-1">
-                        <div className="text-xs text-gray-400">{lt('pairAddress')}:</div>
+                    <div className={styles.positionFooter}>
+                      <div className={styles.pairInfo}>
+                        <div className={styles.pairLabel}>{lt('pairAddress')}:</div>
                         <button 
-                          className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded hover:bg-blue-900/50 transition"
+                          className={styles.copyBtn}
                           onClick={() => {
                             navigator.clipboard.writeText(position.pairAddress)
                               .then(() => console.log("Address copied"))
@@ -2211,13 +2165,13 @@ const LiquidityPage = () => {
                           {lt('copy')}
                         </button>
                       </div>
-                      <div className="text-xs text-blue-400 break-all mb-2">{position.pairAddress}</div>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-400">{lt('lpTokenBalance')}:</span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-white font-medium">{formatTokenAmount(position.lpBalance)}</span>
+                      <div className={styles.pairAddress}>{position.pairAddress}</div>
+                      <div className={styles.lpInfo}>
+                        <span className={styles.lpLabel}>{lt('lpTokenBalance')}:</span>
+                        <div className={styles.lpBalanceGroup}>
+                          <span className={styles.lpBalance}>{formatTokenAmount(position.lpBalance)}</span>
                           <button 
-                            className="text-xs bg-green-900/30 text-green-400 px-2 py-0.5 rounded hover:bg-green-900/50 transition flex items-center"
+                            className={styles.addToWalletBtn}
                             onClick={() => handleAddLPTokenToWallet(position)}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2238,12 +2192,12 @@ const LiquidityPage = () => {
 
       {/* Token Selection Modal */}
       {showTokenModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-light rounded-lg max-w-md w-full p-4 border border-primary/20">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-white">{lt('selectToken')}</h3>
+        <div className={styles.modalOverlay}>
+          <div className={styles.modal}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>{lt('selectToken')}</h3>
               <button 
-                className="text-gray-400 hover:text-white"
+                className={styles.closeButton}
                 onClick={() => setShowTokenModal(false)}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2254,22 +2208,20 @@ const LiquidityPage = () => {
             <input 
               type="text" 
               placeholder={lt('searchPlaceholder')} 
-              className="w-full bg-dark-default border border-gray-700 rounded-lg px-3 py-2 mb-4 text-white"
+              className={styles.searchInput}
             />
-            <div className="max-h-60 overflow-y-auto">
+            <div className={styles.tokenList}>
               {Object.keys(tokens).map((tokenId) => (
                 <div 
                   key={tokenId}
-                  className="flex items-center p-3 hover:bg-dark-default rounded-lg cursor-pointer"
+                  className={styles.tokenItem}
                   onClick={() => handleTokenSelect(tokenId)}
                 >
-                  <div>
-                    <div className="font-medium text-white">{tokens[tokenId].symbol}</div>
-                    <div className="text-xs text-gray-400">{tokens[tokenId].name}</div>
+                  <div className={styles.tokenInfo}>
+                    <div className={styles.tokenName}>{tokens[tokenId].symbol}</div>
+                    <div className={styles.tokenFullName}>{tokens[tokenId].name}</div>
                   </div>
-                  <div className="ml-auto text-right">
-                    <div className="text-white">{tokens[tokenId].balance}</div>
-                  </div>
+                  <div className={styles.tokenBalance}>{tokens[tokenId].balance}</div>
                 </div>
               ))}
             </div>
@@ -2279,12 +2231,12 @@ const LiquidityPage = () => {
 
       {/* Verification Result Modal */}
       {showVerificationModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-light rounded-lg max-w-3xl w-full p-6 border border-primary/20 max-h-[80vh] flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-white">Position Verification Results</h3>
+        <div className={styles.modalOverlay}>
+          <div className={`${styles.modal} ${styles.verificationModal}`}>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>Position Verification Results</h3>
               <button 
-                className="text-gray-400 hover:text-white"
+                className={styles.closeButton}
                 onClick={() => setShowVerificationModal(false)}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2292,12 +2244,12 @@ const LiquidityPage = () => {
                 </svg>
               </button>
             </div>
-            <div className="overflow-y-auto mb-4 flex-1">
-              <pre className="p-3 bg-dark-default text-gray-300 rounded whitespace-pre-wrap overflow-x-auto">{verificationResult}</pre>
+            <div className={styles.verificationContent}>
+              <pre className={styles.verificationResult}>{verificationResult}</pre>
             </div>
-            <div className="flex justify-between">
+            <div className={styles.modalFooter}>
               <button
-                className="px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-600 transition"
+                className={styles.copyResultBtn}
                 onClick={() => {
                   navigator.clipboard.writeText(verificationResult)
                     .then(() => showSuccess("Results copied to clipboard!"))
@@ -2307,7 +2259,7 @@ const LiquidityPage = () => {
                 Copy to Clipboard
               </button>
               <button
-                className="px-4 py-2 rounded-lg bg-gray-700 text-white hover:bg-gray-600 transition"
+                className={styles.closeModalBtn}
                 onClick={() => setShowVerificationModal(false)}
               >
                 Close

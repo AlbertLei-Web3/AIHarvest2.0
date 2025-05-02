@@ -4,15 +4,12 @@
 
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 26, 26, 46;
-  --background-mid-rgb: 22, 33, 62;
-  --background-end-rgb: 15, 52, 96;
-  --star-color: 255, 255, 255;
   --color-primary: #e2336b;
   --color-secondary: #fcac46;
   --color-dark-default: #1a1a2e;
   --color-dark-light: #16213e;
   --color-dark-lighter: #0f3460;
+  --star-color: 255, 255, 255;
 }
 
 html {
@@ -35,7 +32,7 @@ body {
   background-color: transparent !important;
 }
 
-/* Stars background effect */
+/* Stars background effect - moved to module but kept for existing components */
 .stars {
   background: transparent;
 }
@@ -108,17 +105,29 @@ body {
   }
 }
 
+/* Shared animation keyframes */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Global utility classes for non-modularized components */
 @layer components {
   .gradient-text {
     @apply bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text;
-  }
-
-  .gradient-button {
-    @apply bg-gradient-to-r from-primary to-secondary text-white font-medium px-5 py-2.5 rounded-lg hover:from-secondary hover:to-primary transition-all duration-300 shadow-md hover:shadow-lg;
-  }
-
-  .card {
-    @apply bg-white/10 dark:bg-dark-light/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-white/20 dark:border-primary/20 mb-6 transition-all hover:shadow-xl hover:border-white/30 dark:hover:border-primary/30;
   }
 
   .input-wrapper {
@@ -131,10 +140,6 @@ body {
 
   .token-selector {
     @apply flex items-center space-x-2 bg-gray-100/80 dark:bg-dark-default/80 backdrop-blur-sm rounded-lg px-3 py-2 hover:bg-gray-200/80 dark:hover:bg-dark-light/80 transition cursor-pointer;
-  }
-
-  .btn-swap {
-    @apply w-10 h-10 bg-white/80 dark:bg-dark-lighter/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all transform hover:rotate-180 duration-300 border border-gray-200/50 dark:border-primary/20;
   }
 
   .btn-primary {

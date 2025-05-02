@@ -1,0 +1,643 @@
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  background-color: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: white;
+}
+
+.notification {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.3s ease-out forwards;
+  max-width: 24rem;
+  width: 100%;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.success {
+  background-color: rgba(39, 174, 96, 0.9);
+  border-left: 4px solid #27ae60;
+  color: white;
+}
+
+.error {
+  background-color: rgba(231, 76, 60, 0.9);
+  border-left: 4px solid #e74c3c;
+  color: white;
+}
+
+.loading {
+  background-color: rgba(52, 152, 219, 0.9);
+  border-left: 4px solid #3498db;
+  color: white;
+}
+
+.info {
+  background-color: rgba(241, 196, 15, 0.9);
+  border-left: 4px solid #f1c40f;
+  color: white;
+}
+
+.controlsContainer {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  background-color: rgba(22, 33, 62, 0.5);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(226, 51, 107, 0.1);
+}
+
+.controlGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.controlLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.select {
+  background-color: white;
+  color: black;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+.sortDirectionBtn {
+  background-color: rgba(15, 23, 42, 0.7);
+  color: white;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.sortDirectionBtn:hover {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.tabsContainer {
+  display: flex;
+  border-bottom: 1px solid rgba(226, 51, 107, 0.2);
+  margin-bottom: 1.5rem;
+}
+
+.tab {
+  padding: 0.5rem 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab:hover {
+  color: rgba(226, 51, 107, 0.9);
+}
+
+.activeTab {
+  border-bottom: 2px solid rgba(226, 51, 107, 1);
+  color: rgba(226, 51, 107, 1);
+  font-weight: 600;
+}
+
+.loadingContainer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+.loadingSpinner {
+  animation: spin 1s linear infinite;
+  border-top: 2px solid rgba(226, 51, 107, 1);
+  border-bottom: 2px solid rgba(226, 51, 107, 1);
+  border-radius: 50%;
+  height: 3rem;
+  width: 3rem;
+}
+
+.loadingText {
+  margin-left: 0.75rem;
+  color: white;
+}
+
+.emptyMessage {
+  text-align: center;
+  padding: 2rem 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.warningMessage {
+  background-color: rgba(22, 33, 62, 0.5);
+  border-left: 4px solid rgba(226, 51, 107, 1);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.25rem;
+}
+
+.poolsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.poolCard {
+  background-color: rgba(22, 33, 62, 0.5);
+  border-radius: 0.5rem;
+  border: 1px solid rgba(226, 51, 107, 0.1);
+  padding: 1rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s;
+}
+
+.poolCard:hover {
+  border-color: rgba(226, 51, 107, 0.3);
+}
+
+.poolHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.poolInfo {
+  display: flex;
+  align-items: center;
+}
+
+.poolIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: rgba(15, 23, 42, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.75rem;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+}
+
+.poolSymbol {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: white;
+}
+
+.poolDetails {
+  display: flex;
+  flex-direction: column;
+}
+
+.poolName {
+  font-weight: 600;
+  color: white;
+}
+
+.poolTokenSymbol {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.aprContainer {
+  text-align: right;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.aprLabel {
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.aprValue {
+  font-size: 1.35rem;
+  font-weight: 700;
+  background: linear-gradient(90deg, #ff9d00, #ff0051, #8800ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 8px rgba(255, 0, 81, 0.4);
+  position: relative;
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.35rem;
+  animation: pulseGlow 3s infinite;
+  white-space: nowrap;
+}
+
+.aprValue::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(255, 157, 0, 0.1), rgba(255, 0, 81, 0.1), rgba(136, 0, 255, 0.1));
+  border-radius: 0.35rem;
+  z-index: -1;
+  animation: rotateBg 8s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes rotateBg {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.aprLoading {
+  font-weight: 600;
+  color: #3b82f6;
+  animation: pulse 1.5s infinite;
+  font-size: 1.1rem;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.statItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.statLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.statValue {
+  font-weight: 600;
+  color: white;
+}
+
+.rewardsContainer {
+  display: flex;
+  align-items: center;
+}
+
+.rewardsValue {
+  font-weight: 600;
+  color: rgba(226, 51, 107, 1);
+}
+
+.refreshButton {
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 0.5rem;
+}
+
+.refreshButton:hover {
+  box-shadow: 0 0 10px rgba(226, 51, 107, 0.5);
+  transform: translateY(-1px);
+}
+
+.actionsContainer {
+  display: flex;
+  justify-content: space-between;
+}
+
+.actionButton {
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.actionButton:hover:not(:disabled) {
+  box-shadow: 0 0 10px rgba(226, 51, 107, 0.5);
+  transform: translateY(-2px);
+}
+
+.actionButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.modal {
+  background-color: rgba(30, 41, 59, 0.95);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  border: 1px solid rgba(226, 51, 107, 0.2);
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.modalContent {
+  margin-bottom: 1rem;
+}
+
+.balanceInfo {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.25rem;
+}
+
+.inputContainer {
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.25rem;
+  overflow: hidden;
+}
+
+.inputContainer:focus-within {
+  border-color: rgba(226, 51, 107, 0.5);
+  box-shadow: 0 0 0 2px rgba(226, 51, 107, 0.25);
+}
+
+.input {
+  flex: 1;
+  padding: 0.5rem;
+  outline: none;
+  background-color: white;
+  color: black;
+}
+
+.maxButton {
+  background-color: rgba(30, 41, 59, 0.9);
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgba(226, 51, 107, 1);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.maxButton:hover {
+  background-color: rgba(51, 65, 85, 0.9);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
+
+.cancelButton {
+  background-color: rgba(15, 23, 42, 0.7);
+  color: white;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.cancelButton:hover {
+  background-color: rgba(30, 41, 59, 0.7);
+}
+
+.adminPanel {
+  margin-top: 2rem;
+  padding: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.2);
+  border-radius: 0.5rem;
+  background-color: rgba(22, 33, 62, 0.5);
+}
+
+.adminTitle {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.formGroup {
+  margin-bottom: 1rem;
+}
+
+.formLabel {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inputGroup {
+  display: flex;
+}
+
+.adminInput {
+  flex: 1;
+  padding: 0.5rem;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.25rem;
+  background-color: white;
+  color: black;
+}
+
+.adminInput:focus {
+  border-color: rgba(226, 51, 107, 0.5);
+  box-shadow: 0 0 0 2px rgba(226, 51, 107, 0.25);
+  outline: none;
+}
+
+.checkButton {
+  margin-left: 0.5rem;
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.checkButton:hover:not(:disabled) {
+  box-shadow: 0 0 10px rgba(226, 51, 107, 0.5);
+}
+
+.checkButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.statusBox {
+  margin-bottom: 1rem;
+  padding: 0.5rem;
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 0.25rem;
+  background-color: rgba(15, 23, 42, 0.7);
+  color: white;
+}
+
+.adminButtonsContainer {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.updateButton {
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.updateButton:hover:not(:disabled) {
+  box-shadow: 0 0 10px rgba(226, 51, 107, 0.5);
+}
+
+.updateButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.disableButton {
+  background-color: rgba(220, 38, 38, 0.3);
+  color: rgba(252, 165, 165, 0.9);
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.disableButton:hover:not(:disabled) {
+  background-color: rgba(220, 38, 38, 0.5);
+}
+
+.disableButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.adminNotes {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .actionsContainer {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .modalActions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .adminButtonsContainer {
+    flex-direction: column;
+  }
+  
+  .controlsContainer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .controlGroup {
+    width: 100%;
+    justify-content: space-between;
+  }
+} 

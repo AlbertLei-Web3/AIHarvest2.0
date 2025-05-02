@@ -1,0 +1,769 @@
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  background-color: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: white;
+}
+
+.liquidityCard {
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: rgba(22, 33, 62, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.cardTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.settingsButton {
+  background-color: transparent;
+  border: none;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.settingsButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.warningBox {
+  background-color: rgba(234, 179, 8, 0.2);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  color: rgba(253, 224, 71, 0.9);
+}
+
+.warningTitle {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.warningText {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.inputContainer {
+  margin-bottom: 1rem;
+}
+
+.inputHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.inputLabel {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.balanceText {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inputWrapper {
+  background-color: rgba(15, 23, 42, 0.7);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+}
+
+.tokenInput {
+  width: 100%;
+  background-color: transparent;
+  border: none;
+  color: white;
+  font-size: 1.25rem;
+  outline: none;
+}
+
+.tokenSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(30, 41, 59, 0.8);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-left: 0.5rem;
+}
+
+.tokenSelector:hover {
+  background-color: rgba(51, 65, 85, 0.8);
+}
+
+.tokenSymbol {
+  font-weight: 600;
+  color: white;
+}
+
+.plusSign {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.plusButton {
+  width: 2.5rem;
+  height: 2.5rem;
+  background-color: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(226, 51, 107, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.infoBox {
+  background-color: rgba(15, 23, 42, 0.7);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.infoTitle {
+  font-weight: 500;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.lpTokenInfo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pairName {
+  background-color: rgba(30, 41, 59, 0.8);
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  color: white;
+  font-weight: 500;
+}
+
+.lpAmount {
+  color: white;
+}
+
+.poolShareInfo {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.buttonGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.approveBtnRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.approveBtn {
+  flex: 1;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+}
+
+.approveBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.approveBtn:disabled {
+  background: rgba(100, 116, 139, 0.6);
+  cursor: not-allowed;
+}
+
+.actionBtn {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  font-weight: 600;
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.2s;
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+}
+
+.actionBtn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.actionBtn:disabled {
+  background: rgba(100, 116, 139, 0.6);
+  cursor: not-allowed;
+}
+
+.positionsCard {
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: rgba(22, 33, 62, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.positionsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.refreshButton {
+  background-color: rgba(37, 99, 235, 0.2);
+  color: rgba(96, 165, 250, 0.9);
+  border: none;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: background-color 0.2s;
+}
+
+.refreshButton:hover {
+  background-color: rgba(37, 99, 235, 0.3);
+}
+
+.utilityBtnGroup {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.reconnectBtn {
+  background-color: rgba(126, 34, 206, 0.2);
+  color: rgba(167, 139, 250, 0.9);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.reconnectBtn:hover {
+  background-color: rgba(126, 34, 206, 0.3);
+}
+
+.resetBtn {
+  background-color: rgba(220, 38, 38, 0.2);
+  color: rgba(252, 165, 165, 0.9);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.resetBtn:hover {
+  background-color: rgba(220, 38, 38, 0.3);
+}
+
+.emptyPositions {
+  background-color: rgba(15, 23, 42, 0.7);
+  border-radius: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.positionItem {
+  background-color: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.positionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.positionPair {
+  background-color: rgba(30, 41, 59, 0.8);
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  color: white;
+  font-weight: 500;
+}
+
+.positionBtnGroup {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.addBtn {
+  background-color: rgba(37, 99, 235, 0.2);
+  color: rgba(96, 165, 250, 0.9);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  background-color: rgba(37, 99, 235, 0.3);
+}
+
+.removeBtn {
+  background-color: rgba(220, 38, 38, 0.2);
+  color: rgba(252, 165, 165, 0.9);
+  border: none;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.removeBtn:hover {
+  background-color: rgba(220, 38, 38, 0.3);
+}
+
+.positionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.positionData {
+  font-size: 0.875rem;
+}
+
+.dataLabel {
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.25rem;
+}
+
+.dataValue {
+  color: white;
+}
+
+.positionFooter {
+  border-top: 1px solid rgba(71, 85, 105, 0.5);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.pairInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.pairLabel {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.copyBtn {
+  background-color: rgba(37, 99, 235, 0.2);
+  color: rgba(96, 165, 250, 0.9);
+  border: none;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.copyBtn:hover {
+  background-color: rgba(37, 99, 235, 0.3);
+}
+
+.pairAddress {
+  font-size: 0.75rem;
+  color: rgba(96, 165, 250, 0.9);
+  word-break: break-all;
+  margin-bottom: 0.5rem;
+}
+
+.lpInfo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lpLabel {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.lpBalanceGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lpBalance {
+  font-size: 0.75rem;
+  color: white;
+  font-weight: 500;
+}
+
+.addToWalletBtn {
+  background-color: rgba(22, 163, 74, 0.2);
+  color: rgba(134, 239, 172, 0.9);
+  border: none;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.addToWalletBtn:hover {
+  background-color: rgba(22, 163, 74, 0.3);
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(3px);
+}
+
+.modal {
+  background-color: rgba(22, 33, 62, 0.95);
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.15);
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.closeButton {
+  background-color: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 0.25rem;
+}
+
+.searchInput {
+  width: 100%;
+  background-color: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(71, 85, 105, 0.5);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: white;
+  margin-bottom: 1rem;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: rgba(226, 51, 107, 0.4);
+}
+
+.tokenList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tokenItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tokenItem:hover {
+  background-color: rgba(30, 41, 59, 0.8);
+}
+
+.tokenInfo {
+  display: flex;
+  flex-direction: column;
+}
+
+.tokenName {
+  font-weight: 500;
+  color: white;
+}
+
+.tokenFullName {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.tokenBalance {
+  color: white;
+  text-align: right;
+}
+
+.verificationModal {
+  max-width: 48rem;
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+}
+
+.verificationContent {
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  flex: 1;
+}
+
+.verificationResult {
+  background-color: rgba(15, 23, 42, 0.7);
+  color: rgba(209, 213, 219, 0.9);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: space-between;
+}
+
+.copyResultBtn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background-color: rgba(37, 99, 235, 0.8);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.copyResultBtn:hover {
+  background-color: rgba(37, 99, 235, 0.9);
+}
+
+.closeModalBtn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background-color: rgba(71, 85, 105, 0.8);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.closeModalBtn:hover {
+  background-color: rgba(71, 85, 105, 0.9);
+}
+
+.notificationContainer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 100;
+}
+
+.notification {
+  max-width: 28rem;
+  width: 100%;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.success {
+  background-color: rgba(22, 101, 52, 0.8);
+  border: 1px solid rgba(34, 197, 94, 0.5);
+}
+
+.error {
+  background-color: rgba(153, 27, 27, 0.8);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+}
+
+.loading {
+  background-color: rgba(30, 58, 138, 0.8);
+  border: 1px solid rgba(96, 165, 250, 0.5);
+}
+
+.notificationContent {
+  display: flex;
+  align-items: flex-start;
+}
+
+.notificationIcon {
+  flex-shrink: 0;
+  margin-right: 0.75rem;
+}
+
+.notificationBody {
+  flex: 1;
+}
+
+.notificationType {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.successType {
+  color: rgba(134, 239, 172, 0.9);
+}
+
+.errorType {
+  color: rgba(252, 165, 165, 0.9);
+}
+
+.loadingType {
+  color: rgba(147, 197, 253, 0.9);
+}
+
+.notificationMessage {
+  word-break: break-all;
+}
+
+.successMessage {
+  color: rgba(187, 247, 208, 0.9);
+}
+
+.errorMessage {
+  color: rgba(254, 202, 202, 0.9);
+}
+
+.loadingMessage {
+  color: rgba(191, 219, 254, 0.9);
+}
+
+.closeNotificationBtn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  margin-left: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .liquidityCard, .positionsCard {
+    padding: 1rem;
+  }
+  
+  .tokenInput {
+    font-size: 1rem;
+  }
+  
+  .positionGrid {
+    grid-template-columns: 1fr;
+  }
+} 

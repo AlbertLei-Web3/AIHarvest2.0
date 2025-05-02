@@ -10,16 +10,13 @@ export const priceRanges = {
   AIH: [0.008, 0.012],
 };
 
-// Type for supported token symbols
+// Export token symbol type
 export type TokenSymbol = keyof typeof priceRanges;
 
-/**
- * Check if a string is a valid TokenSymbol
- * 检查字符串是否是有效的代币符号
- */
-export const isValidTokenSymbol = (symbol: string): symbol is TokenSymbol => {
-  return symbol in priceRanges;
-};
+// Check if a string is a valid token symbol
+export function isValidTokenSymbol(symbol: string): symbol is TokenSymbol {
+  return Object.keys(priceRanges).includes(symbol);
+}
 
 // Store current simulated prices
 interface PriceState {
@@ -41,6 +38,9 @@ export const priceState: PriceState = {
   prices: { ...initialPrices },
   lastUpdated: Date.now(),
 };
+
+// Track active simulation interval
+let activeSimulationInterval: NodeJS.Timeout | null = null;
 
 /**
  * Generate a random price within the defined range for a token
@@ -69,6 +69,7 @@ export const updateAllPrices = (): void => {
   });
   
   priceState.lastUpdated = Date.now();
+  console.log('Price update completed, timestamp:', priceState.lastUpdated);
 };
 
 /**
@@ -110,21 +111,31 @@ export const calculateLpTokenPrice = (
 };
 
 /**
- * Setup interval to update prices periodically (every 5 seconds)
+ * Setup interval to update prices periodically (every 6 seconds)
  */
 export const startPriceSimulation = (): NodeJS.Timeout => {
+  // Clear any existing interval to prevent duplicates
+  if (activeSimulationInterval) {
+    clearInterval(activeSimulationInterval);
+    console.log('Cleared existing price simulation interval');
+  }
+  
   // Update immediately once
   updateAllPrices();
+  console.log('Starting new price simulation interval (6s)');
   
   // Then set interval for regular updates
-  return setInterval(() => {
+  activeSimulationInterval = setInterval(() => {
+    console.log('Interval triggered, updating prices...');
     updateAllPrices();
-    // Optional: broadcast price update event
+    // Broadcast price update event
     const event = new CustomEvent('priceUpdate', { 
       detail: { prices: getAllTokenPrices() } 
     });
     window.dispatchEvent(event);
-  }, 5000); // Update every 5 seconds
+  }, 6000); // Update every 6 seconds
+  
+  return activeSimulationInterval;
 };
 
 /**
@@ -132,4 +143,8 @@ export const startPriceSimulation = (): NodeJS.Timeout => {
  */
 export const stopPriceSimulation = (intervalId: NodeJS.Timeout): void => {
   clearInterval(intervalId);
+  if (activeSimulationInterval === intervalId) {
+    activeSimulationInterval = null;
+  }
+  console.log('Price simulation stopped');
 }; 

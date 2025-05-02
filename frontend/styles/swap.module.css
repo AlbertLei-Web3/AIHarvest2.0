@@ -1,0 +1,342 @@
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+  background-color: transparent;
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 2rem;
+  text-align: center;
+  color: white;
+}
+
+.swapCard {
+  max-width: 480px;
+  margin: 0 auto;
+  background-color: rgba(22, 33, 62, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+}
+
+.swapHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.swapTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.settingsButton {
+  background-color: transparent;
+  border: none;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: background-color 0.2s;
+}
+
+.settingsButton:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.inputContainer {
+  background-color: rgba(15, 52, 96, 0.5);
+  border-radius: 1rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.inputHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.inputLabel {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.balanceText {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.inputRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tokenInput {
+  width: 70%;
+  background-color: transparent;
+  border: none;
+  color: white;
+  font-size: 1.25rem;
+  outline: none;
+  padding: 0.5rem 0;
+}
+
+.tokenSelector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(22, 33, 62, 0.5);
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tokenSelector:hover {
+  background-color: rgba(22, 33, 62, 0.7);
+}
+
+.tokenIcon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.tokenSymbol {
+  font-weight: 600;
+  color: white;
+}
+
+.swapButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  width: 100%;
+  transition: opacity 0.2s, transform 0.2s;
+  margin-top: 1rem;
+}
+
+.swapButton:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.swapButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.swapReverseButton {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(22, 33, 62, 0.8);
+  border: 1px solid rgba(226, 51, 107, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: -0.75rem auto;
+  position: relative;
+  z-index: 5;
+  cursor: pointer;
+  transition: transform 0.3s, background-color 0.2s;
+}
+
+.swapReverseButton:hover {
+  transform: rotate(180deg);
+  background-color: rgba(226, 51, 107, 0.2);
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 1rem;
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.infoLabel {
+  font-weight: 400;
+}
+
+.infoValue {
+  font-weight: 500;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(3px);
+}
+
+.modal {
+  background-color: rgba(22, 33, 62, 0.95);
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 51, 107, 0.15);
+  padding: 1.5rem;
+  width: 90%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.modalTitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: white;
+}
+
+.closeButton {
+  background-color: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 0.25rem;
+}
+
+.searchInput {
+  width: 100%;
+  background-color: rgba(15, 52, 96, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  color: white;
+  margin-bottom: 1rem;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: rgba(226, 51, 107, 0.4);
+}
+
+.tokenList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tokenItem {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tokenItem:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.tokenItemInfo {
+  display: flex;
+  flex-direction: column;
+  margin-left: 0.75rem;
+}
+
+.tokenItemName {
+  font-weight: 500;
+  color: white;
+}
+
+.tokenItemBalance {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.notificationContainer {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 100;
+  width: 300px;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: white;
+}
+
+.success {
+  background-color: rgba(39, 174, 96, 0.9);
+}
+
+.error {
+  background-color: rgba(231, 76, 60, 0.9);
+}
+
+.loading {
+  background-color: rgba(52, 152, 219, 0.9);
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive styles */
+@media (max-width: 640px) {
+  .swapCard {
+    padding: 1rem;
+  }
+  
+  .tokenInput {
+    font-size: 1rem;
+  }
+  
+  .tokenIcon {
+    width: 20px;
+    height: 20px;
+  }
+} 
