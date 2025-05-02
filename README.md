@@ -7,20 +7,24 @@ A decentralized platform for token swapping, liquidity provision, and yield farm
 ### Smart Contracts
 - ✅ AIHToken - ERC20 token implementation
 - ✅ SimpleSwapRouter - DEX router for swapping tokens and managing liquidity pools
-- ❌ SimpleFarm - Farming contract has been removed
+- ✅ SimpleFarm - Farming contract for staking LP tokens
+- ✅ PairERC20 - Liquidity pool token implementation
+- ✅ SimpleAttacker - Contract for testing security vulnerabilities
+- ✅ ReentrancyChecker - Security contract for testing reentrancy
 
 ### Frontend Integration
 - ✅ Contract ABIs defined and structured
 - ✅ Contract interaction hooks implemented
-  - useAIHToken - Interact with the AIH token contract
-  - useSimpleSwap - Interact with the swap router
-  - ❌ useSimpleFarm - Removed
+  - useTokens - Interact with the AIH token contract
+  - useSwap - Interact with the swap router
+  - useLiquidity - Interact with liquidity pools
+  - useWeb3 - Web3 connection management
 - ✅ Swap interface connected to contracts
 - ✅ Liquidity interface connected to contracts
   - Add/remove liquidity functionality
   - Liquidity position management
   - Pair address verification
-- ❌ Farm interface removed
+- ✅ Farm interface implemented
 
 ## Contract Integration
 
@@ -34,9 +38,9 @@ The frontend integrates with smart contracts through custom React hooks that uti
 
 ```tsx
 // In a component
-const { balance, approve, transfer } = useAIHToken();
-const { swap, addLiquidity, removeLiquidity } = useSimpleSwap();
-// Farm functionality has been removed
+const { balance, approve, transfer } = useTokens();
+const { swap, addLiquidity, removeLiquidity } = useSwap();
+const { stake, unstake, harvest } = useFarm(); // If implemented in the future
 ```
 
 ## Development
@@ -55,7 +59,7 @@ const { swap, addLiquidity, removeLiquidity } = useSimpleSwap();
    ```
 3. Start the development server:
    ```
-   npm run dev
+   npm run dev:frontend
    ```
 
 ### Architecture
@@ -82,7 +86,11 @@ We have implemented the following core smart contracts:
    - AMM based on constant product formula (x*y=k)
    - Protocol fee collection (1/6 of fees)
 
-// SimpleFarm contract has been removed from the frontend
+3. **SimpleFarm**: Staking contract for liquidity pool tokens
+   - Stake LP tokens to earn AIH rewards
+   - Configurable reward rates
+   - Time-based reward distribution
+   - Emergency withdrawal function
 
 ## Pair Creation Mechanism
 
@@ -113,9 +121,25 @@ The platform provides a complete liquidity management system:
    - Configurable slippage tolerance
    - Receive underlying tokens back proportional to pool share
 
+## Farm Functionality
+
+The farming module allows users to:
+
+1. **Stake LP Tokens**:
+   - Deposit liquidity provider tokens into farms
+   - Choose from multiple farms with different reward rates
+
+2. **Harvest Rewards**:
+   - Claim earned AIH tokens from staking
+   - View pending rewards in real-time
+
+3. **Manage Stakes**:
+   - View active stakes across different farms
+   - Unstake LP tokens when desired
+
 ## Next Steps
 
-- Complete contract integration for farming interface
+- Enhance farming interface with additional features
 - Implement user positions tracking
 - Add transaction history
 - Develop analytics dashboard
@@ -125,10 +149,13 @@ The platform provides a complete liquidity management system:
 ```
 aiharvest/
 ├── contracts/               # Smart contract code
-│   ├── AIHToken.sol         # Token contract
-│   ├── SimpleFarm.sol       # Staking/farming contract
-│   ├── SimpleSwapRouter.sol # Swap router contract
-│   └── interfaces/          # Interface definitions
+│   ├── contracts/           # Solidity contracts
+│   │   ├── AIHToken.sol     # Token contract
+│   │   ├── SimpleFarm.sol   # Staking/farming contract
+│   │   ├── SimpleSwapRouter.sol # Swap router contract
+│   │   └── interfaces/      # Interface definitions
+│   ├── scripts/             # Deployment scripts
+│   └── test/                # Test files
 │
 ├── frontend/                # Frontend application
 │   ├── components/          # Reusable components
@@ -138,10 +165,8 @@ aiharvest/
 │   │   ├── liquidity.tsx    # Liquidity management interface
 │   │   └── farm.tsx         # Farming interface
 │   ├── utils/               # Utility functions
-│   │   └── contracts.ts     # Contract interaction functions
-│   ├── public/              # Static assets
 │   ├── styles/              # Style files
-│   └── diagrams/            # Flow diagrams
+│   └── contexts/            # React contexts
 │
 ├── backend/                 # Backend service
 │   ├── api/                 # API routes
@@ -156,9 +181,9 @@ aiharvest/
 │   └── mappings/            # Event mappings
 │
 ├── scripts/                 # Deployment & management scripts
-├── deployments/             # Deployment artifacts
+├── docs/                    # Documentation
 ├── nginx/                   # Nginx configuration
-└── test/                    # Test code
+└── public/                  # Public assets
 ```
 
 ## Getting Started
@@ -182,9 +207,8 @@ aiharvest/
 
 2. Set up the development environment
    ```
-   # On Linux/Mac
-   chmod +x scripts/setup-dev.sh
-   ./scripts/setup-dev.sh
+   # Install dependencies
+   npm install
    
    # On Windows
    scripts\setup-dev.bat
@@ -202,6 +226,7 @@ aiharvest/
    npm run dev:backend
    
    # Start Hardhat local node
+   cd contracts
    npx hardhat node
    ```
 
@@ -212,6 +237,7 @@ The project includes detailed flow diagrams for key processes:
 1. **Liquidity Provision Flow**: Visualizes the complete process of adding liquidity
 2. **Pair Creation Mechanism**: Illustrates how pair addresses are deterministically generated
 3. **Token Swap Flow**: Shows the path of token exchange through the router
+4. **Farm Staking Flow**: Demonstrates the process of staking LP tokens and earning rewards
 
 These diagrams help developers understand the system architecture and aid in further development.
 
@@ -235,12 +261,14 @@ flowchart TD
     subgraph Contracts
         AIHToken[AIHToken]
         Router[SimpleSwapRouter]
+        Farm[SimpleFarm]
     end
     
     subgraph APIs
         TokenAPI[Token API]
         SwapAPI[Swap API]
         LiquidityAPI[Liquidity API]
+        FarmAPI[Farm API]
     end
     
     subgraph Hooks
@@ -248,27 +276,34 @@ flowchart TD
         useSwap[useSwap]
         useLiquidity[useLiquidity]
         useWeb3[useWeb3]
+        useFarm[useFarm Future]
     end
     
     subgraph Pages
         Swap[Swap Page]
         Liquidity[Liquidity Page]
+        Farm[Farm Page]
     end
     
     AIHToken --> TokenAPI
     Router --> SwapAPI
     Router --> LiquidityAPI
+    Farm --> FarmAPI
     
     TokenAPI --> useTokens
     SwapAPI --> useSwap
     LiquidityAPI --> useLiquidity
+    FarmAPI -.-> useFarm
     
     useTokens --> Swap
     useTokens --> Liquidity
+    useTokens --> Farm
     useSwap --> Swap
     useLiquidity --> Liquidity
+    useFarm -.-> Farm
     useWeb3 --> Swap
     useWeb3 --> Liquidity
+    useWeb3 --> Farm
 ```
 
-After removing farm functionality, the application now focuses solely on token swapping and liquidity provision. 
+The application provides a complete DeFi solution with token swapping, liquidity provision, and yield farming capabilities. 
