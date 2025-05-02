@@ -386,61 +386,62 @@ const SwapPage = () => {
   
   // Calculate output amount based on input
   const calculateOutputAmount = async (): Promise<void> => {
-    if (!fromAmount || isNaN(parseFloat(fromAmount)) || parseFloat(fromAmount) <= 0) {
-      setToAmount('');
-      setShowExchangeInfo(false);
-      return;
-    }
-    
     try {
-      setTransactionPending(true);
-      
-      const fromTokenAddress = tokens[fromToken].address;
-      const toTokenAddress = tokens[toToken].address;
-      
-      // Get the swap quote from the router
+      if (!fromAmount || parseFloat(fromAmount) <= 0) {
+        setToAmount('');
+        setShowExchangeInfo(false);
+        return;
+      }
+
+      // Set loading state
+      setToAmount('...');
+
+      const fromTokenObj = tokens[fromToken];
+      const toTokenObj = tokens[toToken];
+
+      if (!fromTokenObj || !toTokenObj) {
+        console.error("Token not found");
+        return;
+      }
+
+      if (!hasPairLiquidity(fromToken, toToken)) {
+        console.error("No liquidity for this pair");
+        setToAmount('0');
+        return;
+      }
+
       const amountOut = await getSwapQuote(
-        fromTokenAddress,
-        toTokenAddress,
-        fromAmount
+        fromTokenObj.address,
+        toTokenObj.address,
+        ethers.utils.parseUnits(fromAmount, fromTokenObj.decimals)
       );
-      
-      setToAmount(amountOut);
-      
-      // Calculate exchange rate (1 fromToken = X toToken)
-      if (parseFloat(amountOut) > 0) {
-        const rate = parseFloat(amountOut) / parseFloat(fromAmount);
-        setExchangeRate(rate.toFixed(6));
+
+      // Format output with 4 decimal places
+      const formattedAmount = ethers.utils.formatUnits(amountOut, toTokenObj.decimals);
+      setToAmount(formatTokenAmount(formattedAmount));
+
+      if (parseFloat(formattedAmount) > 0) {
+        const rate = parseFloat(formattedAmount) / parseFloat(fromAmount);
         
-        // Get pair reserves to calculate price impact
-        const [reserveFrom, reserveTo] = await getPairReserves(
-          fromTokenAddress,
-          toTokenAddress
-        );
+        setExchangeRate(rate.toFixed(4));
         
         // Calculate price impact
-        // Price impact = (spot price - execution price) / spot price * 100
-        const spotPrice = parseFloat(reserveTo) / parseFloat(reserveFrom);
-        const executionPrice = parseFloat(amountOut) / parseFloat(fromAmount);
+        const reserves = await getPairReserves(fromTokenObj.address, toTokenObj.address);
         
-        let impact = 0;
-        if (spotPrice > 0) {
-          impact = Math.abs((spotPrice - executionPrice) / spotPrice * 100);
+        if (reserves && reserves[0] && reserves[1]) {
+          // Simple price impact calculation
+          const executionPrice = parseFloat(formattedAmount) / parseFloat(fromAmount);
+          const reservePrice = parseFloat(reserves[1]) / parseFloat(reserves[0]);
+          
+          const impact = Math.abs(((executionPrice - reservePrice) / reservePrice) * 100);
+          setPriceImpact(impact.toFixed(2));
         }
-        
-        setPriceImpact(impact.toFixed(2));
-      } else {
-        setExchangeRate('0');
-        setPriceImpact('0');
       }
       
-      setShowExchangeInfo(Boolean(parseFloat(amountOut) > 0));
+      setShowExchangeInfo(Boolean(parseFloat(formattedAmount) > 0));
     } catch (error) {
-      console.error('Error calculating swap:', error);
-      setToAmount('');
-      setShowExchangeInfo(false);
-    } finally {
-      setTransactionPending(false);
+      console.error("Error calculating swap output:", error);
+      setToAmount('0');
     }
   };
   
@@ -492,6 +493,15 @@ const SwapPage = () => {
   // Hide notification
   const hideNotification = () => {
     setNotification(null);
+  };
+  
+  // Add a formatting function to limit token amount decimal places
+  const formatTokenAmount = (amount: string): string => {
+    const num = parseFloat(amount);
+    if (isNaN(num)) return amount;
+    
+    // Show exactly 4 decimal places
+    return num.toFixed(4);
   };
   
   // Handle approve token
@@ -697,31 +707,19 @@ const SwapPage = () => {
           {/* From token input */}
           <div className="mb-4">
             <div className="flex justify-between mb-2">
-              <span className="text-gray-400">{st('from')}</span>
-              <span className="text-sm text-gray-400">
+              <span className="text-gray-300">{st('from')}</span>
+              <span className="text-sm text-gray-300">
                 {!mounted ? st('connectWallet') : (
                   isConnected 
-                    ? `${st('balance')}: ${tokens[fromToken].balance} ${tokens[fromToken].symbol}`
+                    ? `${st('balance')}: ${formatTokenAmount(tokens[fromToken].balance)} ${tokens[fromToken].symbol}`
                     : st('connectWallet')
                 )}
               </span>
             </div>
-            <div className="flex items-center bg-dark-default rounded-lg p-4">
-              <div 
-                className="flex items-center space-x-2 cursor-pointer"
-                onClick={() => {
-                  setCurrentSelector('from');
-                  setShowTokenModal(true);
-                }}
-              >
-                <span className="text-white font-medium">{tokens[fromToken].symbol}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </div>
+            <div className="bg-[rgba(15,23,42,0.7)] border border-[rgba(71,85,105,0.5)] rounded-xl flex items-center p-3">
               <input 
                 type="text" 
-                className="ml-auto w-1/2 bg-transparent text-white text-right focus:outline-none"
+                className="w-full bg-transparent text-white text-lg focus:outline-none"
                 placeholder="0.0"
                 value={fromAmount}
                 onChange={(e) => {
@@ -733,6 +731,18 @@ const SwapPage = () => {
                   }
                 }}
               />
+              <div 
+                className="flex items-center gap-2 bg-[rgba(30,41,59,0.8)] rounded-xl px-3 py-2 cursor-pointer hover:bg-[rgba(51,65,85,0.8)] transition-colors ml-2"
+                onClick={() => {
+                  setCurrentSelector('from');
+                  setShowTokenModal(true);
+                }}
+              >
+                <span className="text-white font-semibold">{tokens[fromToken].symbol}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
             </div>
           </div>
           
@@ -761,49 +771,49 @@ const SwapPage = () => {
           {/* To token input */}
           <div className="mb-6">
             <div className="flex justify-between mb-2">
-              <span className="text-gray-400">{st('to')}</span>
-              <span className="text-sm text-gray-400">
+              <span className="text-gray-300">{st('to')}</span>
+              <span className="text-sm text-gray-300">
                 {!mounted ? st('connectWallet') : (
                   isConnected 
-                    ? `${st('balance')}: ${tokens[toToken].balance} ${tokens[toToken].symbol}`
+                    ? `${st('balance')}: ${formatTokenAmount(tokens[toToken].balance)} ${tokens[toToken].symbol}`
                     : st('connectWallet')
                 )}
               </span>
             </div>
-            <div className="flex items-center bg-dark-default rounded-lg p-4">
+            <div className="bg-[rgba(15,23,42,0.7)] border border-[rgba(71,85,105,0.5)] rounded-xl flex items-center p-3">
+              <input 
+                type="text" 
+                className="w-full bg-transparent text-white text-lg focus:outline-none"
+                placeholder="0.0"
+                value={toAmount}
+                readOnly
+              />
               <div 
-                className="flex items-center space-x-2 cursor-pointer"
+                className="flex items-center gap-2 bg-[rgba(30,41,59,0.8)] rounded-xl px-3 py-2 cursor-pointer hover:bg-[rgba(51,65,85,0.8)] transition-colors ml-2"
                 onClick={() => {
                   setCurrentSelector('to');
                   setShowTokenModal(true);
                 }}
               >
-                <span className="text-white font-medium">{tokens[toToken].symbol}</span>
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                <span className="text-white font-semibold">{tokens[toToken].symbol}</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
               </div>
-              <input 
-                type="text" 
-                className="ml-auto w-1/2 bg-transparent text-white text-right focus:outline-none"
-                placeholder="0.0"
-                value={toAmount}
-                readOnly
-              />
             </div>
           </div>
           
           {/* Exchange rate and price impact */}
           {showExchangeInfo && (
-            <div className="mb-6 bg-dark-default rounded-lg p-4 text-sm">
+            <div className="mb-6 bg-[rgba(15,23,42,0.7)] border border-[rgba(71,85,105,0.5)] rounded-xl p-4 text-sm">
               <div className="flex justify-between mb-2">
-                <span className="text-gray-400">{st('exchangeRate')}</span>
+                <span className="text-gray-300">{st('exchangeRate')}</span>
                 <span className="text-white">
                   1 {tokens[fromToken].symbol} ≈ {exchangeRate} {tokens[toToken].symbol}
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-400">{st('priceImpact')}</span>
+                <span className="text-gray-300">{st('priceImpact')}</span>
                 <span className="text-white">~{priceImpact}%</span>
               </div>
             </div>
@@ -893,7 +903,11 @@ const SwapPage = () => {
                       <div className="text-sm text-gray-400">{tokens[id].name}</div>
                     </div>
                     <div className="ml-auto text-sm text-gray-300">
-                      {tokens[id].balance}
+                      <div className="flex flex-row items-center">
+                        <span className="text-white text-sm">
+                          {formatTokenAmount(tokens[id].balance)} {tokens[id].symbol}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}

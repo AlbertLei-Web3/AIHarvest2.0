@@ -105,12 +105,21 @@
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   border: 1px solid rgba(226, 51, 107, 0.1);
+  cursor: pointer;
+  display: block;
+  text-decoration: none;
 }
 
 .featureCard:hover {
   transform: translateY(-8px);
   box-shadow: 0 15px 30px rgba(0, 0, 0, 0.15);
-  border-color: rgba(226, 51, 107, 0.3);
+  border-color: rgba(226, 51, 107, 0.5);
+  background-color: rgba(22, 33, 62, 0.6);
+}
+
+.featureCard:active {
+  transform: translateY(-4px);
+  transition: transform 0.1s;
 }
 
 .featureIconContainer {

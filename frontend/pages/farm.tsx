@@ -71,6 +71,7 @@ interface FarmTranslation {
   withdrawing: string;
   harvesting: string;
   approved: string;
+  approve: string;
   depositSuccess: string;
   withdrawSuccess: string;
   harvestSuccess: string;
@@ -79,6 +80,20 @@ interface FarmTranslation {
   withdrawError: string;
   harvestError: string;
   max: string;
+  refresh: string;
+  sortBy: string;
+  sortApr: string;
+  sortTotalStaked: string;
+  sortYourStake: string;
+  sortPendingRewards: string;
+  sortAsc: string;
+  sortDesc: string;
+  filter: string;
+  filterAll: string;
+  filterStakedOnly: string;
+  loading: string;
+  loadingPools: string;
+  noPoolsFound: string;
   // Admin panel translations
   adminManagePools: string;
   lpTokenAddress: string;
@@ -251,6 +266,7 @@ const FarmPage = () => {
       withdrawing: 'Withdrawing...',
       harvesting: 'Harvesting...',
       approved: 'Token approved successfully',
+      approve: 'Approve',
       depositSuccess: 'Deposit successful',
       withdrawSuccess: 'Withdraw successful',
       harvestSuccess: 'Harvest successful',
@@ -259,6 +275,20 @@ const FarmPage = () => {
       withdrawError: 'Withdraw failed',
       harvestError: 'Harvest failed',
       max: 'MAX',
+      refresh: 'Refresh',
+      sortBy: 'Sort by',
+      sortApr: 'APR',
+      sortTotalStaked: 'Total Staked',
+      sortYourStake: 'Your Stake',
+      sortPendingRewards: 'Pending Rewards',
+      sortAsc: '↑ Asc',
+      sortDesc: '↓ Desc',
+      filter: 'Filter',
+      filterAll: 'All Pools',
+      filterStakedOnly: 'Staked Only',
+      loading: 'Loading...',
+      loadingPools: 'Loading pools...',
+      noPoolsFound: 'No pools found matching your filters',
       // Admin panel translations
       adminManagePools: 'Admin: Manage Farm Pools',
       lpTokenAddress: 'LP Token Address',
@@ -302,6 +332,7 @@ const FarmPage = () => {
       withdrawing: '提取中...',
       harvesting: '收获中...',
       approved: '代币授权成功',
+      approve: '授权',
       depositSuccess: '存入成功',
       withdrawSuccess: '提取成功',
       harvestSuccess: '收获成功',
@@ -310,6 +341,20 @@ const FarmPage = () => {
       withdrawError: '提取失败',
       harvestError: '收获失败',
       max: '最大',
+      refresh: '刷新',
+      sortBy: '排序',
+      sortApr: '年化收益率',
+      sortTotalStaked: '总质押量',
+      sortYourStake: '您的质押量',
+      sortPendingRewards: '待领取奖励',
+      sortAsc: '升序',
+      sortDesc: '降序',
+      filter: '筛选',
+      filterAll: '所有池子',
+      filterStakedOnly: '已质押池子',
+      loading: '加载中...',
+      loadingPools: '加载池子...',
+      noPoolsFound: '没有找到匹配您筛选条件的池子',
       // Admin panel translations
       adminManagePools: '管理员：管理农场池',
       lpTokenAddress: 'LP代币地址',
@@ -1414,35 +1459,35 @@ const FarmPage = () => {
       {/* 排序和筛选控件 */}
       <div className={styles.controlsContainer}>
         <div className={styles.controlGroup}>
-          <label className={styles.controlLabel}>Sort by:</label>
+          <label className={styles.controlLabel}>{ft('sortBy')}:</label>
           <select 
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as SortOption)}
             className={styles.select}
           >
-            <option value="apr">APR</option>
-            <option value="totalStaked">Total Staked</option>
-            <option value="userStaked">Your Stake</option>
-            <option value="pendingRewards">Pending Rewards</option>
+            <option value="apr">{ft('sortApr')}</option>
+            <option value="totalStaked">{ft('sortTotalStaked')}</option>
+            <option value="userStaked">{ft('sortYourStake')}</option>
+            <option value="pendingRewards">{ft('sortPendingRewards')}</option>
           </select>
           
           <button
             onClick={() => setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')}
             className={styles.sortDirectionBtn}
           >
-            {sortDirection === 'desc' ? '↓ Desc' : '↑ Asc'}
+            {sortDirection === 'desc' ? ft('sortDesc') : ft('sortAsc')}
           </button>
         </div>
         
         <div className={styles.controlGroup}>
-          <label className={styles.controlLabel}>Filter:</label>
+          <label className={styles.controlLabel}>{ft('filter')}:</label>
           <select
             value={filterOption}
             onChange={(e) => setFilterOption(e.target.value as FilterOption)}
             className={styles.select}
           >
-            <option value="all">All Pools</option>
-            <option value="stakedOnly">Staked Only</option>
+            <option value="all">{ft('filterAll')}</option>
+            <option value="stakedOnly">{ft('filterStakedOnly')}</option>
           </select>
         </div>
       </div>
@@ -1469,7 +1514,7 @@ const FarmPage = () => {
       {isLoadingPools && (
         <div className={styles.loadingContainer}>
           <div className={styles.loadingSpinner}></div>
-          <span className={styles.loadingText}>Loading pools...</span>
+          <span className={styles.loadingText}>{ft('loadingPools')}</span>
         </div>
       )}
       
@@ -1479,7 +1524,7 @@ const FarmPage = () => {
         <div>
           {filteredAndSortedPools.length === 0 ? (
             <div className={styles.emptyMessage}>
-              No pools found matching your filters
+              {ft('noPoolsFound')}
             </div>
           ) : (
             <div className={styles.poolsContainer}>
@@ -1498,7 +1543,7 @@ const FarmPage = () => {
                     <div className={styles.aprContainer}>
                       <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className={styles.aprLoading}>Loading...</p>
+                        <p className={styles.aprLoading}>{ft('loading')}</p>
                       ) : (
                         <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
@@ -1532,7 +1577,7 @@ const FarmPage = () => {
                         {isLoadingRewards ? (
                           <div className="flex items-center">
                             <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
-                            <span className="text-secondary">Loading...</span>
+                            <span className="text-secondary">{ft('loading')}</span>
                           </div>
                         ) : (
                           <div className={styles.rewardsContainer}>
@@ -1543,7 +1588,7 @@ const FarmPage = () => {
                               disabled={isLoadingRewards}
                               className={styles.refreshButton}
                             >
-                              {isLoadingRewards ? '...' : 'Refresh'}
+                              {isLoadingRewards ? '...' : ft('refresh')}
                             </button>
                           </div>
                         )}
@@ -1616,7 +1661,7 @@ const FarmPage = () => {
                     <div className={styles.aprContainer}>
                       <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className={styles.aprLoading}>Loading...</p>
+                        <p className={styles.aprLoading}>{ft('loading')}</p>
                       ) : (
                         <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
@@ -1638,7 +1683,7 @@ const FarmPage = () => {
                       {isLoadingRewards ? (
                         <div className="flex items-center">
                           <div className="h-4 w-4 mr-2 border-t-2 border-b-2 border-secondary rounded-full animate-spin"></div>
-                          <span className="text-secondary">Loading...</span>
+                          <span className="text-secondary">{ft('loading')}</span>
                         </div>
                       ) : (
                         <div className={styles.rewardsContainer}>
@@ -1649,7 +1694,7 @@ const FarmPage = () => {
                             disabled={isLoadingRewards}
                             className={styles.refreshButton}
                           >
-                            {isLoadingRewards ? '...' : 'Refresh'}
+                            {isLoadingRewards ? '...' : ft('refresh')}
                           </button>
                         </div>
                       )}
@@ -1729,7 +1774,7 @@ const FarmPage = () => {
                     onClick={handleApprove}
                     disabled={isApproving}
                   >
-                    {isApproving ? ft('approving') : 'Approve'}
+                    {isApproving ? ft('approving') : ft('approve')}
                   </button>
                   
                   <button

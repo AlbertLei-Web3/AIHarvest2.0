@@ -1827,15 +1827,8 @@ const LiquidityPage = () => {
     const num = parseFloat(amount);
     if (isNaN(num)) return amount;
 
-    // 如果数字很小，保留更多小数位
-    if (num < 0.001) return '<0.001';
-    if (num < 0.01) return num.toFixed(4);
-    if (num < 1) return num.toFixed(3);
-    if (num < 10) return num.toFixed(2);
-    if (num < 1000) return num.toFixed(1);
-    
-    // 大数字保留0位小数
-    return Math.floor(num).toString();
+    // 精确到小数点后四位
+    return num.toFixed(4);
   };
 
   // Add new state variables
@@ -1934,7 +1927,7 @@ const LiquidityPage = () => {
               <span className={styles.balanceText}>
                 {!mounted ? lt('connectWallet') : (
                   isConnected 
-                    ? `${lt('balance')}: ${tokens[tokenA].balance} ${tokens[tokenA].symbol}`
+                    ? `${lt('balance')}: ${formatTokenAmount(tokens[tokenA].balance)} ${tokens[tokenA].symbol}`
                     : lt('connectWallet')
                 )}
               </span>
@@ -1978,7 +1971,7 @@ const LiquidityPage = () => {
               <span className={styles.balanceText}>
                 {!mounted ? lt('connectWallet') : (
                   isConnected 
-                    ? `${lt('balance')}: ${tokens[tokenB].balance} ${tokens[tokenB].symbol}`
+                    ? `${lt('balance')}: ${formatTokenAmount(tokens[tokenB].balance)} ${tokens[tokenB].symbol}`
                     : lt('connectWallet')
                 )}
               </span>
@@ -2014,7 +2007,7 @@ const LiquidityPage = () => {
                 <div className={styles.pairName}>
                   <span>{tokens[tokenA].symbol}-{tokens[tokenB].symbol}</span>
                 </div>
-                <span className={styles.lpAmount}>{lpAmount} LP</span>
+                <span className={styles.lpAmount}>{formatTokenAmount(lpAmount)} LP</span>
               </div>
               <div className={styles.poolShareInfo}>
                 <span>{lt('shareOfPool')}</span>
