@@ -46,11 +46,71 @@ module.exports = {
             transform: 'translateY(-15%)',
             animationTimingFunction: 'cubic-bezier(0, 0, 0.2, 1)'
           }
+        },
+        'wave': {
+          '0%': {
+            backgroundPositionX: '0px'
+          },
+          '100%': {
+            backgroundPositionX: '1000px'
+          }
+        },
+        'wave-reverse': {
+          '0%': {
+            backgroundPositionX: '0px'
+          },
+          '100%': {
+            backgroundPositionX: '-1000px'
+          }
+        },
+        'float': {
+          '0%, 100%': {
+            transform: 'translateY(0) scale(1)',
+          },
+          '50%': {
+            transform: 'translateY(-20px) scale(1.05)',
+          }
+        },
+        'float-reverse': {
+          '0%, 100%': {
+            transform: 'translateY(0) scale(1)',
+          },
+          '50%': {
+            transform: 'translateY(20px) scale(1.05)',
+          }
+        },
+        'float-slow': {
+          '0%, 100%': {
+            transform: 'translateY(0) translateX(0)',
+          },
+          '25%': {
+            transform: 'translateY(-15px) translateX(15px)',
+          },
+          '50%': {
+            transform: 'translateY(0) translateX(30px)',
+          },
+          '75%': {
+            transform: 'translateY(15px) translateX(15px)',
+          }
+        },
+        'twinkle': {
+          '0%, 100%': {
+            opacity: 1,
+          },
+          '50%': {
+            opacity: 0.5,
+          }
         }
       },
       animation: {
         'bounce-slow': 'bounce-slow 1.5s infinite',
-        'bounce-slow-reverse': 'bounce-slow-reverse 1.5s infinite'
+        'bounce-slow-reverse': 'bounce-slow-reverse 1.5s infinite',
+        'wave': 'wave 30s linear infinite',
+        'wave-reverse': 'wave-reverse 15s linear infinite',
+        'float': 'float 8s ease-in-out infinite',
+        'float-reverse': 'float-reverse 9s ease-in-out infinite',
+        'float-slow': 'float-slow 12s ease-in-out infinite',
+        'twinkle': 'twinkle 3s ease-in-out infinite'
       }
     },
   },

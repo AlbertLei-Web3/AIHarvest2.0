@@ -3,29 +3,109 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 26, 26, 46;
+  --background-mid-rgb: 22, 33, 62;
+  --background-end-rgb: 15, 52, 96;
+  --star-color: 255, 255, 255;
+  --color-primary: #e2336b;
+  --color-secondary: #fcac46;
+  --color-dark-default: #1a1a2e;
+  --color-dark-light: #16213e;
+  --color-dark-lighter: #0f3460;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 26, 26, 46;
-    --background-mid-rgb: 22, 33, 62;
-    --background-end-rgb: 15, 52, 96;
-  }
+html {
+  height: 100%;
+  background-color: transparent !important;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      rgb(var(--background-start-rgb)),
-      rgb(var(--background-mid-rgb)),
-      rgb(var(--background-end-rgb))
-    )
-    fixed;
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  background-color: transparent !important;
+}
+
+/* Make sure any container is transparent by default */
+.container {
+  background-color: transparent !important;
+}
+
+/* Stars background effect */
+.stars {
+  background: transparent;
+}
+
+.stars:after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-image: 
+    radial-gradient(1px 1px at 25% 5%, rgba(var(--star-color), 0.8) 1px, transparent 0),
+    radial-gradient(1px 1px at 50% 25%, rgba(var(--star-color), 0.6) 1px, transparent 0),
+    radial-gradient(1px 1px at 75% 45%, rgba(var(--star-color), 0.8) 1px, transparent 0),
+    radial-gradient(2px 2px at 15% 65%, rgba(var(--star-color), 0.4) 1px, transparent 0),
+    radial-gradient(2px 2px at 35% 85%, rgba(var(--star-color), 0.7) 1px, transparent 0),
+    radial-gradient(1px 1px at 65% 15%, rgba(var(--star-color), 0.5) 1px, transparent 0),
+    radial-gradient(1px 1px at 85% 35%, rgba(var(--star-color), 0.7) 1px, transparent 0),
+    radial-gradient(1px 1px at 95% 75%, rgba(var(--star-color), 0.4) 1px, transparent 0);
+  background-size: 200px 200px;
+  background-position: 0 0;
+  animation: stars-animation 120s linear infinite;
+  opacity: 0.3;
+}
+
+@keyframes stars-animation {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 200px 200px;
+  }
+}
+
+/* Shooting star effect */
+.stars:before {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: rgba(var(--star-color), 0.9);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(var(--star-color), 0.1),
+              0 0 0 8px rgba(var(--star-color), 0.1),
+              0 0 20px rgba(var(--star-color), 1);
+  animation: shooting-star 6s linear infinite;
+  opacity: 0;
+}
+
+@keyframes shooting-star {
+  0% {
+    transform: translateX(0) translateY(0);
+    opacity: 0;
+  }
+  10% {
+    transform: translateX(30px) translateY(30px);
+    opacity: 1;
+  }
+  15% {
+    transform: translateX(100px) translateY(100px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(100px) translateY(100px);
+    opacity: 0;
+  }
 }
 
 @layer components {
@@ -38,7 +118,7 @@ body {
   }
 
   .card {
-    @apply bg-white dark:bg-dark-light rounded-xl p-6 shadow-lg border border-gray-200 dark:border-primary/20 mb-6;
+    @apply bg-white/10 dark:bg-dark-light/50 backdrop-blur-md rounded-xl p-6 shadow-lg border border-white/20 dark:border-primary/20 mb-6 transition-all hover:shadow-xl hover:border-white/30 dark:hover:border-primary/30;
   }
 
   .input-wrapper {
@@ -50,18 +130,18 @@ body {
   }
 
   .token-selector {
-    @apply flex items-center space-x-2 bg-gray-100 dark:bg-dark-default rounded-lg px-3 py-2 hover:bg-gray-200 dark:hover:bg-dark-light transition cursor-pointer;
+    @apply flex items-center space-x-2 bg-gray-100/80 dark:bg-dark-default/80 backdrop-blur-sm rounded-lg px-3 py-2 hover:bg-gray-200/80 dark:hover:bg-dark-light/80 transition cursor-pointer;
   }
 
   .btn-swap {
-    @apply w-10 h-10 bg-white dark:bg-dark-lighter rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all transform hover:rotate-180 duration-300 border border-gray-200 dark:border-primary/20;
+    @apply w-10 h-10 bg-white/80 dark:bg-dark-lighter/80 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:shadow-lg transition-all transform hover:rotate-180 duration-300 border border-gray-200/50 dark:border-primary/20;
   }
 
   .btn-primary {
-    @apply w-full py-3 bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white rounded-lg font-medium transition-all duration-300;
+    @apply w-full py-3 bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white rounded-lg font-medium transition-all duration-300 hover:-translate-y-1 hover:shadow-lg;
   }
 
   .btn-secondary {
-    @apply w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all duration-300;
+    @apply w-full py-3 bg-white/10 backdrop-blur-sm border border-white/20 hover:bg-white/20 text-white rounded-lg font-medium transition-all duration-300 hover:-translate-y-1;
   }
 } 

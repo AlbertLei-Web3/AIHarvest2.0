@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
+import styles from './index.module.css';
 
 // Translations for the home page
 const translations = {
@@ -48,29 +49,29 @@ export default function Home() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-16">
+    <div className={styles.container}>
       {/* Hero Section */}
-      <div className="text-center mb-24">
-        <h1 className="text-4xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-secondary text-transparent bg-clip-text">
+      <div className={styles.heroSection}>
+        <h1 className={styles.title}>
           {homeT('title')}
         </h1>
-        <h2 className="text-2xl md:text-3xl font-semibold mb-8 text-white/90">
+        <h2 className={styles.subtitle}>
           {homeT('subtitle')}
         </h2>
-        <p className="text-lg max-w-2xl mx-auto mb-12 text-white/80">
+        <p className={styles.description}>
           {homeT('description')}
         </p>
-        <div className="flex justify-center space-x-4">
+        <div className={styles.buttonContainer}>
           {isConnected ? (
             <Link 
               href="/swap" 
-              className="px-8 py-4 bg-gradient-to-r from-primary to-secondary rounded-lg font-bold text-white shadow-glow hover:shadow-glow-lg transition-all"
+              className={styles.button}
             >
               {homeT('getStarted')}
             </Link>
           ) : (
             <button 
-              className="px-8 py-4 bg-gradient-to-r from-primary to-secondary rounded-lg font-bold text-white shadow-glow hover:shadow-glow-lg transition-all"
+              className={styles.button}
             >
               {homeT('connectWallet')}
             </button>
@@ -79,53 +80,53 @@ export default function Home() {
       </div>
 
       {/* Features Section */}
-      <section className="mb-24">
-        <h2 className="text-3xl font-bold text-center mb-16 text-white">
+      <section className={styles.featuresSection}>
+        <h2 className={styles.sectionTitle}>
           {homeT('features')}
         </h2>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className={styles.featuresGrid}>
           {/* Swap Feature */}
-          <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all hover:bg-dark-lightest border border-primary/10">
-            <div className="h-16 w-16 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center mb-6 mx-auto">
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconContainer}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-center mb-4 text-white">
+            <h3 className={styles.featureTitle}>
               {homeT('swapTokens')}
             </h3>
-            <p className="text-white/70 text-center">
+            <p className={styles.featureDescription}>
               {homeT('swapDescription')}
             </p>
           </div>
           
           {/* Liquidity Feature */}
-          <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all hover:bg-dark-lightest border border-primary/10">
-            <div className="h-16 w-16 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center mb-6 mx-auto">
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconContainer}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-center mb-4 text-white">
+            <h3 className={styles.featureTitle}>
               {homeT('provideLiquidity')}
             </h3>
-            <p className="text-white/70 text-center">
+            <p className={styles.featureDescription}>
               {homeT('liquidityDescription')}
             </p>
           </div>
           
           {/* Farm Feature */}
-          <div className="bg-dark-lighter rounded-2xl p-8 shadow-lg hover:shadow-xl transition-all hover:bg-dark-lightest border border-primary/10">
-            <div className="h-16 w-16 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center mb-6 mx-auto">
+          <div className={styles.featureCard}>
+            <div className={styles.featureIconContainer}>
               <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold text-center mb-4 text-white">
+            <h3 className={styles.featureTitle}>
               {homeT('farmYield')}
             </h3>
-            <p className="text-white/70 text-center">
+            <p className={styles.featureDescription}>
               {homeT('farmDescription')}
             </p>
           </div>
