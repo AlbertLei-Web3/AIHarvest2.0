@@ -1,23 +1,42 @@
+/**
+ * Deployment script for AIHarvest contracts
+ * AIHarvest合约部署脚本
+ * 
+ * This script deploys the core contracts (AIHToken, SimpleSwapRouter, SimpleFarm)
+ * and sets up the initial configuration between them.
+ * 该脚本部署核心合约（AIHToken、SimpleSwapRouter、SimpleFarm）
+ * 并设置它们之间的初始配置。
+ */
+
 const hre = require("hardhat");
 
+/**
+ * Main deployment function
+ * 主要部署函数
+ */
 async function main() {
   console.log("Deploying AIHarvest contracts to", hre.network.name, "network...");
 
   try {
     // Get the contract factories
+    // 获取合约工厂
     const AIHToken = await hre.ethers.getContractFactory("AIHToken");
     const SimpleSwapRouter = await hre.ethers.getContractFactory("SimpleSwapRouter");
     const SimpleFarm = await hre.ethers.getContractFactory("SimpleFarm");
     // Add any new contract factories here
+    // 在此处添加任何新的合约工厂
     // const NewContract = await hre.ethers.getContractFactory("NewContract");
     
     // Get signers
+    // 获取签名者
     const signers = await hre.ethers.getSigners();
     console.log("Deploying with account:", signers[0].address);
     
     // Get gas price for optimized deployment - Sepolia may need higher values
+    // 获取优化部署的gas价格 - Sepolia可能需要更高的值
     const gasPrice = await hre.ethers.provider.getGasPrice();
     // Use slightly higher gas price for Sepolia to ensure faster confirmation
+    // 为Sepolia使用稍高的gas价格以确保更快的确认
     const optimizedGasPrice = hre.network.name === "sepolia" 
       ? gasPrice.mul(120).div(100)  // 20% higher for Sepolia
       : gasPrice.mul(110).div(100); // 10% higher for other networks
@@ -26,6 +45,7 @@ async function main() {
     console.log("Using gas price:", hre.ethers.utils.formatUnits(optimizedGasPrice, "gwei"), "gwei");
     
     // Prepare wallet addresses with validation
+    // 使用验证准备钱包地址
     const teamWallet = getValidAddress(process.env.TEAM_WALLET, signers.length > 1 ? signers[1].address : signers[0].address);
     const ecosystemWallet = getValidAddress(process.env.ECOSYSTEM_WALLET, signers.length > 2 ? signers[2].address : signers[0].address);
     
@@ -33,6 +53,7 @@ async function main() {
     console.log("Ecosystem wallet:", ecosystemWallet);
     
     // Deploy token with team and ecosystem wallets
+    // 使用团队和生态系统钱包部署代币
     console.log("Deploying AIHToken...");
     const aihToken = await AIHToken.deploy(
       teamWallet, 
@@ -46,6 +67,7 @@ async function main() {
     console.log("AIHToken deployed to:", tokenAddress);
     
     // Deploy SimpleSwapRouter with AIHToken address
+    // 使用AIHToken地址部署SimpleSwapRouter
     console.log("Deploying SimpleSwapRouter...");
     const simpleSwapRouter = await SimpleSwapRouter.deploy(
       tokenAddress,
@@ -58,6 +80,7 @@ async function main() {
     console.log("SimpleSwapRouter deployed to:", routerAddress);
     
     // Deploy SimpleFarm with AIHToken address
+    // 使用AIHToken地址部署SimpleFarm
     console.log("Deploying SimpleFarm...");
     const simpleFarm = await SimpleFarm.deploy(
       tokenAddress,
