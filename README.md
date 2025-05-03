@@ -1,260 +1,106 @@
 # AIHarvest 2.0
 
-A decentralized platform for token swapping, liquidity provision, and yield farming.
+A decentralized finance (DeFi) platform for token swapping, liquidity provision, and yield farming built on the Ethereum ecosystem.
 
-## Implementation Status
+去中心化金融(DeFi)平台，基于以太坊生态系统构建，用于代币交换、流动性提供和收益耕作。
 
-### Smart Contracts
-- ✅ AIHToken - ERC20 token implementation
-- ✅ SimpleSwapRouter - DEX router for swapping tokens and managing liquidity pools
-- ✅ SimpleFarm - Farming contract for staking LP tokens
-- ✅ PairERC20 - Liquidity pool token implementation
-- ✅ SimpleAttacker - Contract for testing security vulnerabilities
-- ✅ ReentrancyChecker - Security contract for testing reentrancy
+## Overview 概述
 
-### Frontend Integration
-- ✅ Contract ABIs defined and structured
-- ✅ Contract interaction hooks implemented
-  - useTokens - Interact with the AIH token contract
-  - useSwap - Interact with the swap router
-  - useLiquidity - Interact with liquidity pools
-  - useWeb3 - Web3 connection management
-- ✅ Swap interface connected to contracts
-- ✅ Liquidity interface connected to contracts
-  - Add/remove liquidity functionality
-  - Liquidity position management
-  - Pair address verification
-- ✅ Farm interface implemented
+AIHarvest 2.0 is a complete DeFi solution with:
+- Solidity smart contracts for on-chain operations
+- Next.js frontend for user interaction
+- Token swapping with automated market maker
+- Liquidity provision with fee collection
+- Yield farming with staking rewards
 
-## Contract Integration
+AIHarvest 2.0是一个完整的DeFi解决方案，包括：
+- 用于链上操作的Solidity智能合约
+- 用于用户交互的Next.js前端
+- 具有自动做市商的代币交换
+- 具有费用收集的流动性提供
+- 具有质押奖励的收益耕作
 
-The frontend integrates with smart contracts through custom React hooks that utilize wagmi/ethers.js. This approach allows for:
-
-1. **Abstracted Contract Interactions**: Components don't need to know the details of contract calls
-2. **Network Awareness**: Automatically uses the correct contract address based on the connected network
-3. **State Management**: Tracks loading, error, and success states for improved UX
-
-### Example Usage
-
-```tsx
-// In a component
-const { balance, approve, transfer } = useTokens();
-const { swap, addLiquidity, removeLiquidity } = useSwap();
-const { stake, unstake, harvest } = useFarm(); // If implemented in the future
-```
-
-## Development
-
-### Prerequisites
-- Node.js 18+
-- Hardhat for contract development
-- Metamask or another web3 wallet
-
-### Setup
-
-1. Clone the repository
-2. Install dependencies:
-   ```
-   npm install
-   ```
-3. Start the development server:
-   ```
-   npm run dev:frontend
-   ```
-
-### Architecture
-
-The project follows a layered architecture:
-- Smart contracts (On-chain)
-- Data indexing (TheGraph)
-- Backend services (Express.js)
-- Frontend application (Next.js)
-
-## Core Smart Contracts
-
-We have implemented the following core smart contracts:
-
-1. **AIHToken**: ERC20 token with minting, burning, and vesting capabilities
-   - Community allocation for token distribution
-   - Team tokens with vesting
-   - Ecosystem fund with vesting
-
-2. **SimpleSwapRouter**: DEX router for token swapping and liquidity provision
-   - Create token pairs with deterministic addresses
-   - Add and remove liquidity with optimal amount calculation
-   - Swap tokens with fee mechanism (0.3% default fee)
-   - AMM based on constant product formula (x*y=k)
-   - Protocol fee collection (1/6 of fees)
-
-3. **SimpleFarm**: Staking contract for liquidity pool tokens
-   - Stake LP tokens to earn AIH rewards
-   - Configurable reward rates
-   - Time-based reward distribution
-   - Emergency withdrawal function
-
-## Pair Creation Mechanism
-
-The SimpleSwapRouter implements a deterministic pair creation system:
-
-1. Pair addresses are computed using a hash formula: `keccak256(ff + router_address + keccak256(token0 + token1) + init_code_hash)`
-2. Token addresses are sorted to ensure consistent pairs (smaller address becomes token0)
-3. Pairs are registered in a bidirectional mapping for efficient lookup
-4. Initial liquidity requires a minimum threshold to prevent dust positions
-
-## Liquidity Management
-
-The platform provides a complete liquidity management system:
-
-1. **Adding Liquidity**:
-   - Select token pairs
-   - Approve token spending
-   - Receive LP tokens representing pool share
-   - First liquidity provider sets the initial price ratio
-
-2. **Managing Positions**:
-   - View all liquidity positions in a user-friendly interface
-   - See detailed information including token amounts and pool share
-   - Verify pair addresses for additional security
-
-3. **Removing Liquidity**:
-   - Remove part or all of a position
-   - Configurable slippage tolerance
-   - Receive underlying tokens back proportional to pool share
-
-## Farm Functionality
-
-The farming module allows users to:
-
-1. **Stake LP Tokens**:
-   - Deposit liquidity provider tokens into farms
-   - Choose from multiple farms with different reward rates
-
-2. **Harvest Rewards**:
-   - Claim earned AIH tokens from staking
-   - View pending rewards in real-time
-
-3. **Manage Stakes**:
-   - View active stakes across different farms
-   - Unstake LP tokens when desired
-
-## Next Steps
-
-- Enhance farming interface with additional features
-- Implement user positions tracking
-- Add transaction history
-- Develop analytics dashboard
-
-## Project Structure
+## Project Structure 项目结构
 
 ```
 aiharvest/
-├── contracts/               # Smart contract code
-│   ├── contracts/           # Solidity contracts
-│   │   ├── AIHToken.sol     # Token contract
-│   │   ├── SimpleFarm.sol   # Staking/farming contract
-│   │   ├── SimpleSwapRouter.sol # Swap router contract
-│   │   └── interfaces/      # Interface definitions
-│   ├── scripts/             # Deployment scripts
-│   └── test/                # Test files
+├── contracts/               # Smart contract code 智能合约代码
+│   ├── contracts/           # Solidity contracts 合约源码
+│   │   ├── core/            # Core protocol contracts 核心协议合约
+│   │   │   ├── AIHToken.sol # Platform token 平台代币
+│   │   │   └── SimpleFarm.sol # Yield farming contract 收益耕作合约
+│   │   ├── dex/             # DEX related contracts DEX相关合约
+│   │   │   ├── PairERC20.sol # LP token for liquidity pairs LP代币
+│   │   │   └── SimpleSwapRouter.sol # DEX router with factory functionality DEX路由器
+│   │   ├── interfaces/      # Contract interfaces 合约接口
+│   │   └── test/            # Testing contracts 测试合约
+│   ├── scripts/             # Deployment and utility scripts 部署和工具脚本
+│   ├── test/                # Test files 测试文件
+│   └── deployments/         # Deployment artifacts 部署文件
 │
-├── frontend/                # Frontend application
-│   ├── components/          # Reusable components
-│   ├── hooks/               # Custom hooks
-│   ├── pages/               # Page components
-│   │   ├── swap.tsx         # Token swap interface
-│   │   ├── liquidity.tsx    # Liquidity management interface
-│   │   └── farm.tsx         # Farming interface
-│   ├── utils/               # Utility functions
-│   ├── styles/              # Style files
-│   └── contexts/            # React contexts
+├── frontend/                # Frontend application 前端应用
+│   ├── components/          # Shared UI components 共享UI组件
+│   │   ├── layout/          # Layout components 布局组件
+│   │   └── wallet/          # Wallet connection components 钱包连接组件
+│   ├── hooks/               # Custom React hooks 自定义React钩子
+│   ├── pages/               # Next.js pages/routes Next.js页面/路由
+│   ├── contexts/            # React contexts React上下文
+│   ├── utils/               # Utility functions 工具函数
+│   │   └── contracts/       # Contract utilities 合约工具
+│   ├── styles/              # CSS styles CSS样式
+│   ├── constants/           # Constants and configurations 常量和配置
+│   └── scripts/             # Frontend scripts 前端脚本
 │
-├── backend/                 # Backend service
-│   ├── api/                 # API routes
-│   ├── config/              # Configuration files
-│   ├── models/              # Data models
-│   ├── services/            # Business logic
-│   └── utils/               # Utility functions
+├── backend/                 # Backend service 后端服务
+│   ├── api/                 # API routes API路由
+│   └── Dockerfile           # Docker configuration Docker配置
 │
-├── subgraph/                # The Graph indexing
-│   ├── schema.graphql       # GraphQL schema
-│   ├── subgraph.yaml        # Subgraph configuration
-│   └── mappings/            # Event mappings
-│
-├── scripts/                 # Deployment & management scripts
-├── docs/                    # Documentation
-├── nginx/                   # Nginx configuration
-└── public/                  # Public assets
+├── subgraph/                # The Graph indexing TheGraph索引
+├── scripts/                 # Project-level scripts 项目级脚本
+├── docs/                    # Documentation 文档
+├── nginx/                   # Nginx configuration Nginx配置
+└── docker-compose.yml       # Docker Compose configuration Docker Compose配置
 ```
 
-## Getting Started
+## Key Features 主要功能
 
-### Prerequisites
+- **Token System**: ERC20 token with minting and vesting capabilities
+  **代币系统**: 具有铸造和归属功能的ERC20代币
 
-- Node.js 18+
-- npm or yarn
-- MongoDB
-- Redis
+- **Decentralized Exchange**: Automated market maker for token swapping
+  **去中心化交易所**: 用于代币交换的自动做市商
+
+- **Liquidity Provision**: Add and remove liquidity to token pairs with fee earning
+  **流动性提供**: 为代币对添加和移除流动性并赚取费用
+
+- **Yield Farming**: Stake LP tokens to earn additional AIH token rewards
+  **收益耕作**: 质押LP代币以赚取额外的AIH代币奖励
+
+- **Wallet Integration**: Connect to MetaMask and other Web3 wallets
+  **钱包集成**: 连接到MetaMask和其他Web3钱包
+
+- **Responsive Design**: Works on desktop and mobile devices
+  **响应式设计**: 适用于桌面和移动设备
+
+## Technology Stack 技术栈
+
+### Smart Contracts 智能合约
+- Solidity (^0.8.20)
 - Hardhat
-- Docker & Docker Compose (for local development with containers)
+- OpenZeppelin Contracts
+- ethers.js
 
-### Installation
+### Frontend 前端
+- Next.js (React)
+- TypeScript
+- Tailwind CSS
+- ethers.js
+- wagmi
+- React Context API
 
-1. Clone the repository
-   ```
-   git clone https://github.com/yourusername/aiharvest.git
-   cd aiharvest
-   ```
+## Architecture 架构
 
-2. Set up the development environment
-   ```
-   # Install dependencies
-   npm install
-   
-   # On Windows
-   scripts\setup-dev.bat
-   ```
-
-3. Start development servers
-   ```
-   # Start backend services with Docker Compose
-   docker-compose up -d
-   
-   # Start frontend development server
-   npm run dev:frontend
-   
-   # Start backend development server
-   npm run dev:backend
-   
-   # Start Hardhat local node
-   cd contracts
-   npx hardhat node
-   ```
-
-## Process Flows
-
-The project includes detailed flow diagrams for key processes:
-
-1. **Liquidity Provision Flow**: Visualizes the complete process of adding liquidity
-2. **Pair Creation Mechanism**: Illustrates how pair addresses are deterministically generated
-3. **Token Swap Flow**: Shows the path of token exchange through the router
-4. **Farm Staking Flow**: Demonstrates the process of staking LP tokens and earning rewards
-
-These diagrams help developers understand the system architecture and aid in further development.
-
-## Features
-
-1. **Connect Wallet**: Connect your Ethereum wallet to the platform
-2. **Swap Tokens**: Exchange tokens with minimal slippage
-3. **Add Liquidity**: Provide liquidity to earn trading fees
-4. **Manage Positions**: View and manage your liquidity positions
-5. **Stake LP Tokens**: Stake your LP tokens to earn AIH rewards
-6. **Harvest Rewards**: Claim your earned AIH tokens
-7. **Withdraw Stake**: Unstake your LP tokens
-8. **Verify Positions**: Verify the authenticity of your liquidity positions
-
-## License
-
-MIT 
+### System Architecture 系统架构
 
 ```mermaid
 flowchart TD
@@ -262,48 +108,349 @@ flowchart TD
         AIHToken[AIHToken]
         Router[SimpleSwapRouter]
         Farm[SimpleFarm]
+        PairERC20[PairERC20]
     end
     
-    subgraph APIs
-        TokenAPI[Token API]
-        SwapAPI[Swap API]
-        LiquidityAPI[Liquidity API]
-        FarmAPI[Farm API]
+    subgraph Frontend
+        subgraph Hooks
+            useTokens[useTokens]
+            useSwap[useSwap]
+            useLiquidity[useLiquidity]
+            useWeb3[useWeb3]
+            useFarm[useFarm]
+        end
+        
+        subgraph Pages
+            Swap[Swap Page]
+            Liquidity[Liquidity Page]
+            Farm[Farm Page]
+        end
+        
+        subgraph Components
+            WalletConnect[Wallet Connect]
+            UI[UI Components]
+        end
     end
     
-    subgraph Hooks
-        useTokens[useTokens]
-        useSwap[useSwap]
-        useLiquidity[useLiquidity]
-        useWeb3[useWeb3]
-        useFarm[useFarm Future]
-    end
-    
-    subgraph Pages
-        Swap[Swap Page]
-        Liquidity[Liquidity Page]
-        Farm[Farm Page]
-    end
-    
-    AIHToken --> TokenAPI
-    Router --> SwapAPI
-    Router --> LiquidityAPI
-    Farm --> FarmAPI
-    
-    TokenAPI --> useTokens
-    SwapAPI --> useSwap
-    LiquidityAPI --> useLiquidity
-    FarmAPI -.-> useFarm
+    AIHToken <--> useTokens
+    Router <--> useSwap
+    Router <--> useLiquidity
+    Farm <--> useFarm
     
     useTokens --> Swap
     useTokens --> Liquidity
     useTokens --> Farm
     useSwap --> Swap
     useLiquidity --> Liquidity
-    useFarm -.-> Farm
-    useWeb3 --> Swap
-    useWeb3 --> Liquidity
-    useWeb3 --> Farm
+    useFarm --> Farm
+    useWeb3 --> WalletConnect
+    
+    WalletConnect --> Swap
+    WalletConnect --> Liquidity
+    WalletConnect --> Farm
 ```
 
-The application provides a complete DeFi solution with token swapping, liquidity provision, and yield farming capabilities. 
+### Contract Architecture 合约架构
+
+```mermaid
+graph TD
+    AIHToken[core/AIHToken.sol] --> SimpleFarm[core/SimpleFarm.sol]
+    SimpleSwapRouter[dex/SimpleSwapRouter.sol] --> PairERC20[dex/PairERC20.sol]
+    SimpleSwapRouter --> IWETH[interfaces/IWETH.sol]
+    SimpleFarm --> SimpleSwapRouter
+```
+
+### Frontend Architecture 前端架构
+
+```mermaid
+graph TD
+    App[Frontend App]
+    
+    App --> Pages[Pages/Routes]
+    App --> Components[Shared Components]
+    App --> Hooks[Custom Hooks]
+    App --> Utils[Utilities]
+    App --> Context[Context Providers]
+    
+    Pages --> Homepage[Home]
+    Pages --> SwapPage[Swap]
+    Pages --> LiquidityPage[Liquidity]
+    Pages --> FarmPage[Farm]
+    
+    Components --> Layout[Layout Components]
+    Components --> UI[UI Components]
+    Components --> Wallet[Wallet Components]
+    
+    Hooks --> Web3[Web3 Hooks]
+    Hooks --> TokenHooks[Token Hooks]
+    Hooks --> SwapHooks[Swap Hooks]
+    Hooks --> LiquidityHooks[Liquidity Hooks]
+    
+    Utils --> Contracts[Contract Utilities]
+    Utils --> Helpers[Helper Functions]
+    
+    Context --> LiquidityContext[Liquidity Context]
+    
+    Contracts --> ERC20[ERC20 Functions]
+    Contracts --> Router[Router Functions]
+    Contracts --> Farm[Farm Functions]
+    Contracts --> Liquidity[Liquidity Functions]
+```
+
+## Setup and Installation 设置和安装
+
+### Prerequisites 前提条件
+
+- Node.js (v16+)
+- npm or yarn
+- MetaMask or another Ethereum wallet
+
+### Contract Development 合约开发
+
+```bash
+# Navigate to contracts directory
+cd contracts
+
+# Install dependencies
+npm install
+
+# Compile contracts
+npm run compile
+
+# Run tests
+npm run test
+
+# Deploy to local network
+npm run deploy
+
+# Deploy to Sepolia testnet
+npm run deploy:sepolia
+```
+
+### Frontend Development 前端开发
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm run start
+```
+
+### Environment Configuration 环境配置
+
+#### Contracts (.env)
+
+```
+PRIVATE_KEY=your_private_key
+INFURA_PROJECT_ID=your_infura_id
+ETHERSCAN_API_KEY=your_etherscan_key
+```
+
+#### Frontend (.env.local)
+
+```
+NEXT_PUBLIC_CHAIN_ID=11155111  # Sepolia testnet
+NEXT_PUBLIC_RPC_URL=https://sepolia.infura.io/v3/your-infura-id
+```
+
+## Development Guidelines 开发指南
+
+### Smart Contract Development 智能合约开发
+
+1. **Security First**: Always prioritize security in contract development
+   **安全第一**: 在合约开发中始终优先考虑安全性
+
+2. **Test Coverage**: Maintain comprehensive test coverage for all contracts
+   **测试覆盖**: 为所有合约维护全面的测试覆盖
+
+3. **Gas Optimization**: Optimize contracts for gas efficiency
+   **Gas优化**: 优化合约以提高gas效率
+
+4. **Documentation**: Keep natspec documentation up-to-date
+   **文档**: 保持natspec文档的更新
+
+### Frontend Development 前端开发
+
+1. **Component-first approach**: Design components before implementing pages
+   **组件优先方法**: 在实现页面之前设计组件
+
+2. **Single responsibility**: Each file should do one thing well
+   **单一职责**: 每个文件应该只做好一件事
+
+3. **Feature folders**: Organize new code by feature, not by type
+   **功能文件夹**: 按功能而非类型组织新代码
+
+4. **State separation**: Use contexts for shared state, local state for UI
+   **状态分离**: 使用上下文管理共享状态，局部状态管理UI
+
+5. **File size limits**: Keep files under 300 lines; extract components and logic when they grow
+   **文件大小限制**: 文件保持在300行以内；当它们增长时提取组件和逻辑
+
+### Recommended Structure for New Features 新功能的推荐结构
+
+```
+frontend/features/           # Feature-based organization 基于功能的组织
+├── swap/                    # Swap feature
+│   ├── components/          # Swap-specific components
+│   ├── hooks/               # Swap-specific hooks
+│   ├── utils/               # Swap-specific utilities
+│   └── SwapContext.tsx      # Swap state management
+├── liquidity/               # Liquidity feature
+│   ├── components/          # Liquidity-specific components
+│   ├── hooks/               # Liquidity-specific hooks
+│   ├── utils/               # Liquidity-specific utilities
+│   └── LiquidityContext.tsx # Liquidity state management
+└── farm/                    # Farming feature
+    ├── components/          # Farm-specific components
+    ├── hooks/               # Farm-specific hooks
+    ├── utils/               # Farm-specific utilities
+    └── FarmContext.tsx      # Farm state management
+```
+
+## Core Smart Contracts 核心智能合约
+
+### AIHToken.sol
+- ERC20 token for the AIHarvest platform
+- Features minting and burning capabilities
+- Implements vesting for team and ecosystem allocations
+- Total supply capped at 1 billion tokens
+
+### SimpleFarm.sol
+- Yield farming contract for staking LP tokens
+- Distributes AIH token rewards to liquidity providers
+- Allows depositing, withdrawing, and harvesting rewards
+- Supports multiple pools with configurable reward allocation
+
+### SimpleSwapRouter.sol
+- DEX implementation for token swapping and liquidity management
+- Integrated factory functionality for creating token pairs
+- Provides methods for adding/removing liquidity, swapping tokens
+- Implements 0.3% swap fee with configurable protocol fee
+
+### PairERC20.sol
+- LP (Liquidity Provider) token representation
+- Minted when users provide liquidity to pools
+- Burned when users withdraw liquidity
+- Each pair has its own LP token
+
+## Frontend Features 前端功能
+
+### Swap Page 交换页面
+- Token selection interface
+- Price information display
+- Slippage tolerance settings
+- Transaction confirmation
+
+### Liquidity Page 流动性页面
+- Add and remove liquidity interface
+- Liquidity position management
+- Pool share and rewards tracking
+- LP token management
+
+### Farm Page 农场页面
+- Stake LP tokens in various pools
+- View and harvest rewards
+- Track APR and pool allocations
+- Manage farming positions
+
+## Contract Integration 合约集成
+
+The frontend integrates with smart contracts through custom React hooks that utilize ethers.js. Key integration points:
+
+前端通过使用ethers.js的自定义React钩子与智能合约集成。主要集成点：
+
+- **Token Contracts**: ERC20 tokens for balance and allowance management
+  **代币合约**: 用于余额和授权管理的ERC20代币
+
+- **Router**: For token swaps and path finding
+  **路由器**: 用于代币交换和路径查找
+
+- **Factory**: For creating and finding liquidity pairs
+  **工厂**: 用于创建和查找流动性对
+
+- **Farm**: For staking and yield farming operations
+  **农场**: 用于质押和收益耕作操作
+
+## Testing 测试
+
+### Smart Contract Testing 智能合约测试
+
+```bash
+# Run all tests
+npm run test
+
+# Run specific test
+npx hardhat test test/CoreContracts.test.js
+
+# Check test coverage
+npx hardhat coverage
+```
+
+### Frontend Testing 前端测试
+
+Currently, the frontend does not have automated tests. This is an area for future improvement.
+
+目前，前端没有自动化测试。这是未来需要改进的领域。
+
+## Contributing 贡献
+
+1. Create a feature branch from `develop`
+   从`develop`创建功能分支
+
+2. Make your changes following the development guidelines
+   按照开发指南进行更改
+
+3. Test your changes locally
+   在本地测试您的更改
+
+4. Submit a pull request to the `develop` branch
+   向`develop`分支提交拉取请求
+
+### Code Structure Best Practices 代码结构最佳实践
+
+For frontend development:
+
+1. **Component-first approach** - Design components before implementing pages
+   **组件优先方法** - 在实现页面之前设计组件
+
+2. **Single responsibility** - Each file should do one thing well
+   **单一职责** - 每个文件应该只做好一件事
+
+3. **Feature folders** - Organize new code by feature, not by type
+   **功能文件夹** - 按功能而非类型组织新代码
+
+4. **State separation** - Use contexts for shared state, local state for UI
+   **状态分离** - 使用上下文管理共享状态，局部状态管理UI
+
+5. **File size limits** - Keep files under 300 lines; extract components and logic when they grow
+   **文件大小限制** - 文件保持在300行以内；当它们增长时提取组件和逻辑
+
+For smart contract development:
+
+1. **Security First** - Always prioritize security in contract development
+   **安全第一** - 在合约开发中始终优先考虑安全性
+
+2. **Test Coverage** - Maintain comprehensive test coverage for all contracts
+   **测试覆盖** - 为所有合约维护全面的测试覆盖
+
+3. **Gas Optimization** - Optimize contracts for gas efficiency
+   **Gas优化** - 优化合约以提高gas效率
+
+4. **Documentation** - Keep natspec documentation up-to-date
+   **文档** - 保持natspec文档的更新
+
+## License 许可
+
+This project is licensed under the MIT License.
+
+本项目采用MIT许可证。 
