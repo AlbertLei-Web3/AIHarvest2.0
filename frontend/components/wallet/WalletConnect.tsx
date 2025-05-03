@@ -3,6 +3,22 @@ import { useAccount, useBalance, useDisconnect, useConnect } from 'wagmi';
 import { useLanguage } from '../layout/Header';
 import dynamic from 'next/dynamic';
 
+// Extend Window interface
+declare global {
+  interface Window {
+    ethereum?: {
+      isMetaMask?: boolean;
+      selectedAddress?: string;
+      chainId?: string;
+      isConnected?: () => boolean;
+      version?: string;
+      request: (args: { method: string; params?: any }) => Promise<any>;
+      on: (event: string, callback: (...args: any[]) => void) => void;
+      removeListener: (event: string, callback: (...args: any[]) => void) => void;
+    };
+  }
+}
+
 interface WalletConnectProps {
   variant?: 'button' | 'full';
 }
@@ -74,7 +90,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => 
         console.log('🌐 Check wallet provider:', {
           hasEthereum: !!window.ethereum,
           hasMetaMask: !!window.ethereum?.isMetaMask,
-          version: window.ethereum?.version || 'unknown'
+          version: (window.ethereum as any)?.version ?? 'unknown'
         });
       }, 1000); // Slight delay to ensure extension has time to inject
     }
@@ -148,7 +164,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => 
   // Show fallback UI until client-side renders complete
   if (!mounted) {
     if (variant === 'button') {
-      return <button className="gradient-button min-h-[44px] min-w-[140px]">Loading...</button>;
+      return <button className="bg-gradient-to-r from-primary to-secondary text-white px-4 py-2 rounded-lg min-h-[44px] min-w-[140px]">Loading...</button>;
     }
     return <div className="rounded-lg bg-gradient-to-br from-dark-default to-dark-lighter p-5 text-white shadow-lg border border-opacity-20 border-primary">Loading...</div>;
   }
@@ -213,7 +229,7 @@ const WalletConnect: React.FC<WalletConnectProps> = ({ variant = 'button' }) => 
 
     return (
       <button
-        className="gradient-button min-h-[44px] min-w-[140px]"
+        className="bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-primary text-white px-4 py-2 rounded-lg transition-all duration-300 font-medium min-h-[44px] min-w-[140px] hover:shadow-lg"
         onClick={handleConnect}
         disabled={isConnecting}
       >
