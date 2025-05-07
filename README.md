@@ -35,7 +35,19 @@ aiharvest/
 │   │   ├── interfaces/      # Contract interfaces 合约接口
 │   │   └── test/            # Testing contracts 测试合约
 │   ├── scripts/             # Deployment and utility scripts 部署和工具脚本
+│   │   ├── deploy.js        # Local deployment script 本地部署脚本
+│   │   ├── deploy-sepolia.js # Sepolia testnet deployment 测试网部署
+│   │   ├── save-deployment.js # Save deployment artifacts 保存部署文件
+│   │   ├── check-compilation.js # Verify contract compilation 验证合约编译
+│   │   ├── run-reentrancy-check.js # Check for reentrancy vulnerabilities 检查重入漏洞
+│   │   └── run-integration-tests.js # Run integration tests 运行集成测试
 │   ├── test/                # Test files 测试文件
+│   │   ├── CoreContracts.test.js # Tests for core contracts 核心合约测试
+│   │   ├── reentrancy-test-v6.js # Reentrancy vulnerability tests 重入漏洞测试
+│   │   ├── attack-vector-test.js # Security attack vector tests 安全攻击向量测试
+│   │   ├── IntegrationTest.js # Complete system integration tests 完整系统集成测试
+│   │   ├── test-full-system.js # Full system functionality tests 完整系统功能测试
+│   │   └── extended-test-full-system.js # Extended system tests 扩展系统测试
 │   └── deployments/         # Deployment artifacts 部署文件
 │
 ├── frontend/                # Frontend application 前端应用
@@ -208,41 +220,41 @@ graph TD
 ### Contract Development 合约开发
 
 ```bash
-# Navigate to contracts directory
+# Navigate to contracts directory 导航到合约目录
 cd contracts
 
-# Install dependencies
+# Install dependencies 安装依赖
 npm install
 
-# Compile contracts
+# Compile contracts 编译合约
 npm run compile
 
-# Run tests
+# Run tests 运行测试
 npm run test
 
-# Deploy to local network
+# Deploy to local network 部署到本地网络
 npm run deploy
 
-# Deploy to Sepolia testnet
+# Deploy to Sepolia testnet 部署到Sepolia测试网
 npm run deploy:sepolia
 ```
 
 ### Frontend Development 前端开发
 
 ```bash
-# Navigate to frontend directory
+# Navigate to frontend directory 导航到前端目录
 cd frontend
 
-# Install dependencies
+# Install dependencies 安装依赖
 npm install
 
-# Start the development server
+# Start the development server 启动开发服务器
 npm run dev
 
-# Build for production
+# Build for production 生产环境构建
 npm run build
 
-# Start production server
+# Start production server 启动生产服务器
 npm run start
 ```
 
@@ -343,6 +355,48 @@ frontend/features/           # Feature-based organization 基于功能的组织
 - Burned when users withdraw liquidity
 - Each pair has its own LP token
 
+## Scripts and Test Files 脚本和测试文件
+
+### Scripts 脚本
+
+- **deploy.js**: Handles local network deployment with contract deployment sequence and initialization
+  **deploy.js**: 处理本地网络部署，包括合约部署顺序和初始化
+
+- **deploy-sepolia.js**: Specialized deployment script for Sepolia testnet with network-specific configurations
+  **deploy-sepolia.js**: 用于Sepolia测试网的专用部署脚本，具有网络特定配置
+
+- **save-deployment.js**: Saves deployment artifacts including contract addresses and ABIs for frontend consumption
+  **save-deployment.js**: 保存部署文件，包括合约地址和ABI供前端使用
+
+- **check-compilation.js**: Verifies contract compilation and identifies potential issues before deployment
+  **check-compilation.js**: 验证合约编译并在部署前识别潜在问题
+
+- **run-reentrancy-check.js**: Executes specialized tests to check for reentrancy vulnerabilities
+  **run-reentrancy-check.js**: 执行专门的测试以检查重入漏洞
+
+- **run-integration-tests.js**: Runs comprehensive integration tests to ensure system components work together
+  **run-integration-tests.js**: 运行全面的集成测试，确保系统组件协同工作
+
+### Test Files 测试文件
+
+- **CoreContracts.test.js**: Unit tests for core contracts like AIHToken and SimpleFarm
+  **CoreContracts.test.js**: 核心合约如AIHToken和SimpleFarm的单元测试
+
+- **reentrancy-test-v6.js**: Specialized tests for identifying reentrancy vulnerabilities in contracts
+  **reentrancy-test-v6.js**: 用于识别合约中重入漏洞的专门测试
+
+- **attack-vector-test.js**: Tests various security attack vectors against the contracts
+  **attack-vector-test.js**: 测试针对合约的各种安全攻击向量
+
+- **IntegrationTest.js**: Comprehensive integration tests for the entire system
+  **IntegrationTest.js**: 整个系统的全面集成测试
+
+- **test-full-system.js**: Tests the full functionality of the system in a simulated environment
+  **test-full-system.js**: 在模拟环境中测试系统的完整功能
+
+- **extended-test-full-system.js**: Extended tests with edge cases and advanced scenarios
+  **extended-test-full-system.js**: 带有边缘情况和高级场景的扩展测试
+
 ## Frontend Features 前端功能
 
 ### Swap Page 交换页面
@@ -386,13 +440,13 @@ The frontend integrates with smart contracts through custom React hooks that uti
 ### Smart Contract Testing 智能合约测试
 
 ```bash
-# Run all tests
+# Run all tests 运行所有测试
 npm run test
 
-# Run specific test
+# Run specific test 运行特定测试
 npx hardhat test test/CoreContracts.test.js
 
-# Check test coverage
+# Check test coverage 检查测试覆盖率
 npx hardhat coverage
 ```
 
