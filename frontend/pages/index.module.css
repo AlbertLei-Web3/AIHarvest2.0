@@ -56,6 +56,26 @@
   gap: 1rem;
 }
 
+.customWalletButton {
+  /* 确保钱包连接按钮样式与其他按钮协调 */
+  display: inline-block;
+}
+
+.customWalletButton > button {
+  /* 使钱包按钮匹配其他按钮的样式 */
+  background: linear-gradient(to right, var(--color-primary), var(--color-secondary)) !important;
+  padding: 1rem 2rem !important;
+  font-weight: 700 !important;
+  min-width: 180px !important;
+  transition: all 0.3s ease !important;
+}
+
+.customWalletButton > button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+  background: linear-gradient(to right, var(--color-secondary), var(--color-primary)) !important;
+}
+
 .button {
   display: inline-block;
   padding: 1rem 2rem;

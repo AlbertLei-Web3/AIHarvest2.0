@@ -1,21 +1,18 @@
 import { useState, useCallback } from 'react';
 import { ethers } from 'ethers';
 import useWeb3 from './useWeb3';
-import { 
-  getTokenInfo, 
-  getTokenBalance, 
-  getTokenAllowance, 
-  approveToken,
-  TokenInfo,
-  logger,
-  TOKENS
-} from '../utils/contracts';
+import { getTokenContract, getTokenInfo, getTokenBalance, getTokenAllowance, approveToken } from '../utils/contracts/erc20';
+import { TokenInfo } from '../utils/contracts/types';
+import { logger } from '../utils/contracts/helpers';
+import { TOKENS } from '../utils/contracts/addresses';
 
 /**
  * Hook for ERC20 token operations
  */
 export default function useTokens() {
   const { account, isConnected } = useWeb3();
+  // 【精华】使用状态缓存机制减少RPC调用，提高前端性能
+  // 【Essential Highlight】Uses state caching to reduce RPC calls and improve frontend performance
   const [loadingInfo, setLoadingInfo] = useState<Record<string, boolean>>({});
   const [loadingBalance, setLoadingBalance] = useState<Record<string, boolean>>({});
   const [loadingAllowance, setLoadingAllowance] = useState<Record<string, boolean>>({});
@@ -33,17 +30,17 @@ export default function useTokens() {
   }, []);
 
   /**
-   * Fetch token information
+   * Get token info
    */
   const fetchTokenInfo = useCallback(async (
     tokenAddress: string
   ): Promise<TokenInfo | null> => {
     if (!ethers.utils.isAddress(tokenAddress)) {
-      setErrors(prev => ({ ...prev, [tokenAddress]: 'Invalid token address' }));
+      setErrors(prev => ({ ...prev, [`info_${tokenAddress}`]: 'Invalid token address' }));
       return null;
     }
-
-    // Return cached info if available
+    
+    // Check cache first
     if (tokenInfoCache[tokenAddress]) {
       return tokenInfoCache[tokenAddress];
     }
@@ -53,12 +50,16 @@ export default function useTokens() {
       const info = await getTokenInfo(tokenAddress);
       
       // Update cache
-      setTokenInfoCache(prev => ({ ...prev, [tokenAddress]: info }));
+      setTokenInfoCache(prev => ({
+        ...prev,
+        [tokenAddress]: info
+      }));
+      
       return info;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error fetching token info';
       logger.error(`Error fetching token info for ${tokenAddress}:`, error);
-      setErrors(prev => ({ ...prev, [tokenAddress]: errorMessage }));
+      setErrors(prev => ({ ...prev, [`info_${tokenAddress}`]: errorMessage }));
       return null;
     } finally {
       setLoadingInfo(prev => ({ ...prev, [tokenAddress]: false }));
@@ -70,27 +71,29 @@ export default function useTokens() {
    */
   const fetchBalance = useCallback(async (
     tokenAddress: string,
-    userAddress?: string
+    ownerAddress?: string
   ): Promise<string> => {
     if (!ethers.utils.isAddress(tokenAddress)) {
       setErrors(prev => ({ ...prev, [`balance_${tokenAddress}`]: 'Invalid token address' }));
       return "0";
     }
 
-    const addressToCheck = userAddress || account;
+    const addressToCheck = ownerAddress || account;
     if (!addressToCheck) {
-      setErrors(prev => ({ ...prev, [`balance_${tokenAddress}`]: 'No user address provided' }));
+      setErrors(prev => ({ ...prev, [`balance_${tokenAddress}`]: 'No owner address provided' }));
       return "0";
     }
-
-    const cacheKey = `${tokenAddress}_${addressToCheck}`;
     
     try {
-      setLoadingBalance(prev => ({ ...prev, [cacheKey]: true }));
+      setLoadingBalance(prev => ({ ...prev, [tokenAddress]: true }));
       const balance = await getTokenBalance(tokenAddress, addressToCheck);
       
       // Update cache
-      setBalanceCache(prev => ({ ...prev, [cacheKey]: balance }));
+      setBalanceCache(prev => ({
+        ...prev,
+        [tokenAddress]: balance
+      }));
+      
       return balance;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error fetching balance';
@@ -98,7 +101,7 @@ export default function useTokens() {
       setErrors(prev => ({ ...prev, [`balance_${tokenAddress}`]: errorMessage }));
       return "0";
     } finally {
-      setLoadingBalance(prev => ({ ...prev, [cacheKey]: false }));
+      setLoadingBalance(prev => ({ ...prev, [tokenAddress]: false }));
     }
   }, [account]);
 
@@ -110,6 +113,8 @@ export default function useTokens() {
     spenderAddress: string,
     ownerAddress?: string
   ): Promise<string> => {
+    // 【精华】代币授权查询系统，支持缓存以减少链上调用
+    // 【Essential Highlight】Token allowance query system with caching to reduce on-chain calls
     if (!ethers.utils.isAddress(tokenAddress) || !ethers.utils.isAddress(spenderAddress)) {
       setErrors(prev => ({ ...prev, [`allowance_${tokenAddress}`]: 'Invalid addresses' }));
       return "0";
@@ -158,6 +163,8 @@ export default function useTokens() {
     amount: string,
     spenderAddress: string
   ): Promise<boolean> => {
+    // 【精华】代币授权流程，包含完整的错误处理与用户反馈
+    // 【Essential Highlight】Token approval process with comprehensive error handling and user feedback
     if (!isConnected) {
       setErrors(prev => ({ ...prev, [`approve_${tokenAddress}`]: 'Wallet not connected' }));
       return false;

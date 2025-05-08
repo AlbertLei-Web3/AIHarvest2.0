@@ -30,7 +30,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     using SafeERC20 for AIHToken;
     using SafeMath for uint256;
 
-    // Constants for calculations
+    // 【精华】常量PRECISION_FACTOR用于确保计算精度，防止奖励计算中的舍入误差
+    // 【Essential Highlight】PRECISION_FACTOR constant ensures calculation precision, preventing rounding errors in reward calculations
     uint256 private constant PRECISION_FACTOR = 1e12;
     
     // Info of each user
@@ -52,7 +53,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
     // The AIH TOKEN
     AIHToken public immutable aihToken;
     
-    // AIH tokens rewarded per second
+    // 【精华】AIH代币每秒奖励量，支持动态调整
+    // 【Essential Highlight】AIH tokens rewarded per second, supports dynamic adjustment
     uint256 public aihPerSecond;
     
     // Total allocation points across all pools
@@ -178,6 +180,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         uint256 accAIHPerShare = pool.accAIHPerShare;
         uint256 lpSupply = pool.totalStaked;
         
+        // 【精华】基于时间的精确奖励计算，根据经过的时间、池子权重和质押总量动态计算奖励
+        // 【Essential Highlight】Time-based precise reward calculation, dynamically calculated based on elapsed time, pool weight, and total staked amount
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && totalAllocPoint > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
             uint256 aihReward = (timeElapsed * aihPerSecond * pool.allocPoint) / totalAllocPoint;
@@ -240,6 +244,9 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _amount The amount of LP tokens to deposit
      */
     function deposit(uint256 _pid, uint256 _amount) external nonReentrant {
+        // 【精华】应用Checks-Effects-Interactions模式防止重入攻击
+        // 【Essential Highlight】Applying Checks-Effects-Interactions pattern to prevent reentrancy attacks
+        
         // CHECKS: Validate inputs
         require(_pid < poolInfo.length, "SimpleFarm: Invalid pool ID");
         require(_amount > 0, "SimpleFarm: Amount must be greater than 0");

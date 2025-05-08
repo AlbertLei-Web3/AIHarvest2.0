@@ -28,8 +28,12 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
 
     // Constants for fee calculations
     uint256 public constant FEE_DENOMINATOR = 1000;
+    // 【精华】最小流动性常量确保池子永远不会被完全清空，防止价格操纵
+    // 【Essential Highlight】MINIMUM_LIQUIDITY constant ensures pools are never completely emptied, preventing price manipulation
     uint256 private constant MINIMUM_LIQUIDITY = 1000;
     
+    // 【精华】可配置的费用参数，支持平台可持续发展
+    // 【Essential Highlight】Configurable fee parameters supporting platform sustainability
     // Fee parameters 费用参数
     uint256 public swapFee = 3; // 0.3% fee by default 默认0.3%费用
     uint256 public protocolFeeCut = 167; // 1/6 of fees (0.05%) goes to protocol 1/6的费用（0.05%）归协议
@@ -116,16 +120,16 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
     }
     
     /**
-     * @dev Add or remove a farm contract authorization
-     * @param _farmAddress Farm contract address
-     * @param _authorized Whether the farm is authorized
+     * @dev Set authorized farm
+     * @param _farm Farm contract address
+     * @param _authorized Whether this farm is authorized to call farmRemoveLiquidity
      */
-    function setFarmAuthorization(address _farmAddress, bool _authorized) external onlyOwner {
-        require(_farmAddress != address(0), "Farm address cannot be zero");
-        
-        authorizedFarms[_farmAddress] = _authorized;
-        
-        emit FarmAuthorizationChanged(_farmAddress, _authorized);
+    function setFarmAuthorization(address _farm, bool _authorized) external onlyOwner {
+        // 【精华】授权农场系统允许特定合约代表用户移除流动性，提升用户体验
+        // 【Essential Highlight】Authorized farm system allows specific contracts to remove liquidity on behalf of users, enhancing user experience
+        require(_farm != address(0), "Invalid farm address");
+        authorizedFarms[_farm] = _authorized;
+        emit FarmAuthorizationChanged(_farm, _authorized);
     }
 
     /**
@@ -318,6 +322,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         
         // If first liquidity provision, mint minimum liquidity to contract (locked)
         if (lpCurrentSupply == 0) {
+            // 【精华】首次添加流动性时锁定最小量LP代币，确保池子永远有流动性
+            // 【Essential Highlight】Locks minimum LP tokens when liquidity is first added, ensuring pools always have some liquidity
             PairERC20(lpToken).mint(address(this), MINIMUM_LIQUIDITY);
         }
         
@@ -685,8 +691,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             // Ensure we have enough initial liquidity
             require(initialLiquidity >= MINIMUM_LIQUIDITY, "INSUFFICIENT_INITIAL_LIQUIDITY");
             
-            // Subtract MINIMUM_LIQUIDITY (1000) from the liquidity provided to the user
-            // This amount is permanently locked in the contract to prevent emptying the pool completely
+            // 【精华】从用户获得的LP代币中扣除MINIMUM_LIQUIDITY数量，这部分永久锁定在合约中
+            // 【Essential Highlight】Subtracts MINIMUM_LIQUIDITY from LP tokens given to user, permanently locking this amount in the contract
             // IMPORTANT: For example, if a user provides 4321 TokenA and 4321 TokenB, 
             // the total LP tokens would be sqrt(4321*4321) = 4321, but the user receives
             // 4321 - 1000 = 3321 LP tokens. The remaining 1000 are permanently locked.

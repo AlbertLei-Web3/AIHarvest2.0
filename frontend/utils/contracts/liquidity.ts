@@ -45,13 +45,20 @@ export const calculateLPTokenAmount = async (
     
     // If pair doesn't exist, this will be the first LP provider
     if (pairAddress === ethers.constants.AddressZero) {
-      // First LP provider gets sqrt(amountA * amountB) - MINIMUM_LIQUIDITY LP tokens
-      // Minimum liquidity (1000) is locked in the contract
+      // 更新：用户应获得与质押数量相等的LP代币，不再减去MINIMUM_LIQUIDITY
+      // 原来逻辑: LP provider gets sqrt(amountA * amountB) - MINIMUM_LIQUIDITY LP tokens
       const amountAFloat = parseFloat(amountADesired);
       const amountBFloat = parseFloat(amountBDesired);
-      const lpTokenAmount = Math.sqrt(amountAFloat * amountBFloat) - 1000;
       
-      logger.debug(`New pair LP token calculation: sqrt(${amountADesired} * ${amountBDesired}) - 1000 = ${lpTokenAmount}`);
+      // 如果A和B代币数量相等，直接返回其中一个数量
+      if (Math.abs(amountAFloat - amountBFloat) < 0.000001) {
+        return amountAFloat.toString();
+      }
+      
+      // 如果不相等，仍使用sqrt计算，但不减去1000
+      const lpTokenAmount = Math.sqrt(amountAFloat * amountBFloat);
+      
+      logger.debug(`New pair LP token calculation: sqrt(${amountADesired} * ${amountBDesired}) = ${lpTokenAmount}`);
       return lpTokenAmount > 0 ? lpTokenAmount.toString() : "0";
     } 
     
@@ -71,7 +78,17 @@ export const calculateLPTokenAmount = async (
     if (reserveA.isZero() || reserveB.isZero() || 
         (reserveA.lt(ethers.utils.parseUnits("0.000001", 18)) && reserveB.lt(ethers.utils.parseUnits("0.000001", 18)))) {
       logger.debug(`Reserves are too low. Treating as new pair.`);
-      const lpTokenAmount = Math.sqrt(parseFloat(amountADesired) * parseFloat(amountBDesired)) - 1000;
+      
+      // 更新：同样不再减去MINIMUM_LIQUIDITY
+      const amountAFloat = parseFloat(amountADesired);
+      const amountBFloat = parseFloat(amountBDesired);
+      
+      // 如果A和B代币数量相等，直接返回其中一个数量
+      if (Math.abs(amountAFloat - amountBFloat) < 0.000001) {
+        return amountAFloat.toString();
+      }
+      
+      const lpTokenAmount = Math.sqrt(amountAFloat * amountBFloat);
       return lpTokenAmount > 0 ? lpTokenAmount.toString() : "0";
     }
     
@@ -114,6 +131,7 @@ export const approveLPToken = async (
     }
     
     const signer = getSigner();
+    const provider = getProvider();
     const signerAddress = await signer.getAddress();
     const router = getRouterContract(signer);
     
@@ -159,8 +177,19 @@ export const approveLPToken = async (
     const amountToApprove = ethers.utils.parseUnits(amount, 18);
     logger.debug(`Amount to approve (in wei): ${amountToApprove.toString()}`);
     
+    // Get current gas price and increase it by 20% to avoid "replacement underpriced" errors
+    const gasPrice = await provider.getGasPrice();
+    const increasedGasPrice = gasPrice.mul(120).div(100);
+    logger.debug(`Using gas price: ${ethers.utils.formatUnits(increasedGasPrice, 'gwei')} gwei`);
+    
+    // Transaction options with optimized gas settings
+    const txOptions = {
+      gasLimit: 150000, // Reasonable gas limit for ERC20 approvals
+      gasPrice: increasedGasPrice
+    };
+    
     // Send approval transaction - IMPORTANT: Approve the router contract to spend LP tokens
-    const tx = await lpTokenContract.approve(CONTRACTS.ROUTER_ADDRESS, amountToApprove);
+    const tx = await lpTokenContract.approve(CONTRACTS.ROUTER_ADDRESS, amountToApprove, txOptions);
     logger.log(`Approval transaction submitted with hash: ${tx.hash}`);
     return tx;
   } catch (error) {

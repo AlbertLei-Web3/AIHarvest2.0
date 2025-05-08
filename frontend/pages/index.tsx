@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useLanguage } from '@/components/layout/Header';
 import { useAccount } from 'wagmi';
 import styles from './index.module.css';
+import WalletConnect from '@/components/wallet/WalletConnect';
 
 // Translations for the home page
 const translations = {
@@ -70,11 +71,9 @@ export default function Home() {
               {homeT('getStarted')}
             </Link>
           ) : (
-            <button 
-              className={styles.button}
-            >
-              {homeT('connectWallet')}
-            </button>
+            <div className={styles.customWalletButton}>
+              <WalletConnect variant="button" />
+            </div>
           )}
         </div>
       </div>

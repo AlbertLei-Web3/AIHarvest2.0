@@ -35,7 +35,8 @@ import {
   isFarmOwner,
   isLpTokenInFarm,
   updatePoolAllocPoints,
-  getPendingRewards
+  getPendingRewards,
+  calculateTotalAllocPoint
 } from '@/utils/contracts/farm';
 import { getTokenBalance, getTokenSymbol, getTokenName } from '@/utils/contracts/erc20';
 import { ethers } from 'ethers';
@@ -112,7 +113,10 @@ interface FarmTranslation {
   adding: string;
   adminNote1: string;
   adminNote2: string;
+  adminNote3: string;
   cancel: string;
+  estimatedShare: string;
+  currentTotalPoints: string;
 }
 
 interface FarmTranslationsType {
@@ -213,6 +217,8 @@ const FarmPage = () => {
     poolId?: number;
     allocPoint?: number;
   }>({ checked: false, isInFarm: false });
+  const [totalAllocPoints, setTotalAllocPoints] = useState<number>(0);
+  const [estimatedRewardShare, setEstimatedRewardShare] = useState<string>('0');
   
   // Get account and language from hooks
   // 从钩子获取账户和语言
@@ -305,9 +311,12 @@ const FarmPage = () => {
       disabling: 'Disabling...',
       addLpToken: 'Add LP Token to Farm',
       adding: 'Adding...',
-      adminNote1: 'Note: Only contract owner can add new pools or update existing ones.',
-      adminNote2: 'Disabling a pool sets allocation points to 0, rather than completely removing it. This is safer.',
-      cancel: 'Cancel'
+      adminNote1: 'Note: Allocation Points determine the reward share of each pool. The contract distributes 0.1 AIH per second across all pools based on their point ratio.',
+      adminNote2: 'Example: If Pool A has 100 points, Pool B has 300 points (total 400), then Pool A gets 25% of rewards, Pool B gets 75%.',
+      adminNote3: 'Disabling a pool sets allocation points to 0, which stops new rewards but preserves existing stakes.',
+      cancel: 'Cancel',
+      estimatedShare: 'Estimated Share',
+      currentTotalPoints: 'Current Total Points'
     },
     zh: {
       farm: '农场',
@@ -371,9 +380,12 @@ const FarmPage = () => {
       disabling: '禁用中...',
       addLpToken: '添加LP代币到农场',
       adding: '添加中...',
-      adminNote1: '注意：只有合约所有者才能添加新池子或更新现有池子。',
-      adminNote2: '禁用池子是将分配点数设置为0，而不是完全删除。这是最安全的方法。',
-      cancel: '取消'
+      adminNote1: '注意：分配点数决定每个池子的奖励份额。合约每秒分配0.1个AIH代币，根据点数比例分配给所有池子。',
+      adminNote2: '示例：如果A池有100点，B池有300点（总计400点），那么A池获得25%的奖励，B池获得75%。',
+      adminNote3: '禁用池子是将分配点数设置为0，这会停止新的奖励分配，但保留现有的质押。',
+      cancel: '取消',
+      estimatedShare: '估计奖励份额',
+      currentTotalPoints: '当前总分配点数'
     }
   };
   
@@ -541,18 +553,31 @@ const FarmPage = () => {
   // Fetch all farm pools data
   // 获取所有农场池数据
   const fetchPoolsData = async () => {
+    if (!FARM_ADDRESS || !ethers.utils.isAddress(FARM_ADDRESS)) {
+      console.error("Invalid farm address");
+      return;
+    }
+
+    setIsLoadingPools(true);
+    
     try {
-      if (!window.ethereum) {
-        console.error('No provider found');
-        return;
-      }
+      console.log("Fetching pools data...");
       
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      const signer = provider.getSigner();
+      const signerAddress = isConnected ? await signer.getAddress() : null;
+      const farmContract = getFarmContract(provider);
+      
+      // Get pool count
       const poolCount = await getPoolCount(provider);
-      const pools: FarmPool[] = [];
-      const userPositions: FarmPool[] = [];
+      console.log("Pool count:", poolCount);
       
-      // Fetch data for each pool
+      // Get total allocation points
+      await getTotalAllocPoints();
+      
+      // Get pool details for each pool
+      const poolsData: FarmPool[] = [];
+      
       for (let pid = 0; pid < poolCount; pid++) {
         try {
           // Get pool info
@@ -672,18 +697,18 @@ const FarmPage = () => {
             isActive: poolInfo.allocPoint > 0
           };
           
-          pools.push(pool);
+          poolsData.push(pool);
           
           if (address && parseFloat(userStaked) > 0) {
-            userPositions.push(pool);
+            userFarmPositions.push(pool);
           }
         } catch (error) {
           console.error(`[DeFi Error] Failed to fetch data for pool ${pid}:`, error);
         }
       }
       
-      setFarmPools(pools);
-      setUserFarmPositions(userPositions);
+      setFarmPools(poolsData);
+      setUserFarmPositions(userFarmPositions);
     } catch (error) {
       console.error('[DeFi Error] Failed to fetch farm data:', error);
     } finally {
@@ -782,9 +807,25 @@ const FarmPage = () => {
         setShowDepositModal(false);
         setDepositAmount('');
         
-        // Refresh data after deposit
-        await refreshRewards(); // 先刷新奖励
-        fetchPoolsData(); // 然后获取完整池子数据
+        // 刷新数据 - 立即刷新一次
+        await refreshRewards();
+        await fetchPoolsData();
+        
+        // 显示正在更新的通知
+        showNotification('info', '更新数据中...');
+        
+        // 延迟后再刷新一次，以确保获取最新数据
+        setTimeout(async () => {
+          await refreshRewards();
+          await fetchPoolsData();
+          
+          // 再延迟一次，确保数据完全更新
+          setTimeout(async () => {
+            await refreshRewards();
+            await fetchPoolsData();
+          }, 2000);
+        }, 1000);
+        
       } catch (err: any) {
         if (err.code === 4001) { // 用户拒绝错误
           showNotification('info', '交易已取消');
@@ -927,25 +968,24 @@ const FarmPage = () => {
   // 检查LP代币是否已在农场中
   const checkLpTokenStatus = async () => {
     if (!newLpToken || !ethers.utils.isAddress(newLpToken)) {
-      alert('Please enter a valid LP token address');
+      alert('请输入有效的LP代币地址');
       return;
     }
     
+    setLpTokenStatus({ checked: false, isInFarm: false });
+    
     try {
       const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      
       const result = await isLpTokenInFarm(provider, newLpToken);
       
-      // 如果在Farm中，获取allocPoint信息
-      let allocPointValue;
-      if (result.isInFarm && result.poolId !== undefined) {
-        try {
-          const poolInfo = await getPoolInfo(provider, result.poolId);
-          allocPointValue = poolInfo ? poolInfo.allocPoint : undefined;
-        } catch (e) {
-          console.error("Error getting pool allocPoint:", e);
-        }
+      let allocPointValue = 0;
+      if (result.isInFarm && typeof result.poolId === 'number') {
+        const poolInfo = await getPoolInfo(provider, result.poolId);
+        allocPointValue = poolInfo ? poolInfo.allocPoint : 0;
       }
       
+      // 更新状态
       setLpTokenStatus({
         checked: true,
         isInFarm: result.isInFarm,
@@ -953,12 +993,24 @@ const FarmPage = () => {
         allocPoint: allocPointValue
       });
       
+      // 如果找到池子，计算它的奖励份额
       if (result.isInFarm) {
+        // 设置当前分配点数为该池子的分配点数
+        setAllocPoint(allocPointValue.toString());
+        
+        // 估算奖励份额
+        const share = calculateEstimatedRewardShare(allocPointValue, totalAllocPoints);
+        setEstimatedRewardShare(share);
+        
         const statusText = allocPointValue === 0 
           ? `LP token already in farm (Pool ID: ${result.poolId}) - 已禁用`
           : `LP token already in farm (Pool ID: ${result.poolId}) - 活跃中`;
         showNotification('info', statusText);
       } else {
+        // 对于新池子，使用默认的分配点数(100)估算
+        const newPoints = parseInt(allocPoint) || 100;
+        const share = calculateEstimatedRewardShare(newPoints, totalAllocPoints + newPoints);
+        setEstimatedRewardShare(share);
         showNotification('info', 'LP token not yet in farm');
       }
     } catch (error) {
@@ -1433,6 +1485,57 @@ const FarmPage = () => {
     );
   };
   
+  // 获取总分配点数
+  const getTotalAllocPoints = async () => {
+    try {
+      const provider = new ethers.providers.Web3Provider(window.ethereum as any);
+      
+      // Use the calculateTotalAllocPoint function which is more robust
+      // This function already has fallback mechanisms if direct contract call fails
+      const totalPoints = await calculateTotalAllocPoint(provider);
+      
+      console.log("Total allocation points:", totalPoints.toString());
+      setTotalAllocPoints(parseInt(totalPoints.toString()));
+      return parseInt(totalPoints.toString());
+    } catch (error) {
+      console.error("Error getting total allocation points:", error);
+      // 计算池子合计分配点数作为备选方案
+      if (farmPools.length > 0) {
+        const total = farmPools.reduce((acc, pool) => acc + pool.allocPoint, 0);
+        setTotalAllocPoints(total);
+        return total;
+      }
+      return 0;
+    }
+  };
+
+  // 计算估计的奖励份额
+  const calculateEstimatedRewardShare = (points: number, total: number) => {
+    if (total === 0) return "0";
+    const percentage = (points / total) * 100;
+    return percentage.toFixed(2);
+  };
+
+  // Handle allocation points input change
+  const handleAllocPointChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setAllocPoint(value);
+    
+    // Calculate estimated reward share
+    const points = parseInt(value) || 0;
+    let totalPoints = totalAllocPoints;
+    
+    // If updating an existing pool, subtract its current allocation points
+    if (lpTokenStatus.isInFarm && lpTokenStatus.allocPoint !== undefined) {
+      totalPoints = totalAllocPoints - lpTokenStatus.allocPoint + points;
+    } else {
+      totalPoints = totalAllocPoints + points;
+    }
+    
+    const share = calculateEstimatedRewardShare(points, totalPoints);
+    setEstimatedRewardShare(share);
+  };
+
   // Main render function
   // 主渲染函数
   return (
@@ -1543,12 +1646,14 @@ const FarmPage = () => {
                     <div className={styles.aprContainer}>
                       <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className={styles.aprLoading}>{ft('loading')}</p>
+                        <p className={styles.aprLoading}>Loading...</p>
                       ) : (
                         <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
-                            `${pool.apr.toFixed(2)}%`
+                            (pool.apr < 100 ? 
+                              `${pool.apr.toFixed(2)}%` : 
+                              `${Math.floor(pool.apr)}%`)
                           }
                         </p>
                       )}
@@ -1661,12 +1766,14 @@ const FarmPage = () => {
                     <div className={styles.aprContainer}>
                       <p className={styles.aprLabel}>{ft('apr')}</p>
                       {pool.isLoadingAPR ? (
-                        <p className={styles.aprLoading}>{ft('loading')}</p>
+                        <p className={styles.aprLoading}>Loading...</p>
                       ) : (
                         <p className={styles.aprValue}>
                           {isNaN(pool.apr) || pool.apr <= 0 ? 
                             '0.00%' : 
-                            `${pool.apr.toFixed(2)}%`
+                            (pool.apr < 100 ? 
+                              `${pool.apr.toFixed(2)}%` : 
+                              `${Math.floor(pool.apr)}%`)
                           }
                         </p>
                       )}
@@ -1889,10 +1996,15 @@ const FarmPage = () => {
             <input
               type="number"
               value={allocPoint}
-              onChange={(e) => setAllocPoint(e.target.value)}
+              onChange={handleAllocPointChange}
               placeholder="100"
               className={styles.adminInput}
             />
+            {/* 显示估计奖励份额 */}
+            <div className={styles.rewardEstimate}>
+              <span>{`${ft('estimatedShare')}: ${estimatedRewardShare}%`}</span>
+              <span>{`${ft('currentTotalPoints')}: ${totalAllocPoints}`}</span>
+            </div>
           </div>
           
           <div className={styles.adminButtonsContainer}>
@@ -1928,6 +2040,7 @@ const FarmPage = () => {
           <div className={styles.adminNotes}>
             <p>{ft('adminNote1')}</p>
             <p>{ft('adminNote2')}</p>
+            <p>{ft('adminNote3')}</p>
           </div>
         </div>
       )}

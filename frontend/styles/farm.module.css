@@ -198,14 +198,16 @@
 
 .poolCard {
   background-color: rgba(22, 33, 62, 0.5);
-  border-radius: 0.5rem;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
   border: 1px solid rgba(226, 51, 107, 0.1);
-  padding: 1rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  transition: border-color 0.2s;
+  transition: transform 0.3s, box-shadow 0.3s, border-color 0.3s;
+  min-height: 180px;
 }
 
 .poolCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
   border-color: rgba(226, 51, 107, 0.3);
 }
 
@@ -213,12 +215,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
+  height: 5rem;
 }
 
 .poolInfo {
   display: flex;
   align-items: center;
+  flex: 1;
 }
 
 .poolIcon {
@@ -260,6 +264,9 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  height: 4rem;
+  justify-content: center;
+  min-width: 110px;
 }
 
 .aprLabel {
@@ -285,6 +292,10 @@
   border-radius: 0.35rem;
   animation: pulseGlow 3s infinite;
   white-space: nowrap;
+  height: 1.8rem;
+  line-height: 1.8rem;
+  min-width: 80px;
+  text-align: center;
 }
 
 .aprValue::after {
@@ -326,6 +337,14 @@
   color: #3b82f6;
   animation: pulse 1.5s infinite;
   font-size: 1.1rem;
+  padding: 0.25rem 0.5rem;
+  height: 1.8rem;
+  line-height: 1.8rem;
+  display: inline-block;
+  min-width: 80px;
+  text-align: center;
+  border-radius: 0.35rem;
+  background-color: rgba(59, 130, 246, 0.1);
 }
 
 @keyframes pulse {
@@ -557,6 +576,26 @@
   border-color: rgba(226, 51, 107, 0.5);
   box-shadow: 0 0 0 2px rgba(226, 51, 107, 0.25);
   outline: none;
+}
+
+.rewardEstimate {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.8);
+  background-color: rgba(15, 23, 42, 0.5);
+  border-radius: 0.25rem;
+  padding: 0.5rem;
+  border: 1px dashed rgba(226, 51, 107, 0.3);
+}
+
+.rewardEstimate span {
+  margin-bottom: 0.25rem;
+}
+
+.rewardEstimate span:last-child {
+  margin-bottom: 0;
 }
 
 .checkButton {

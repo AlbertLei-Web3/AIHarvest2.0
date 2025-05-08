@@ -162,6 +162,7 @@ export const approveToken = async (
   
   try {
     const signer = getSigner();
+    const provider = getProvider();
     const signerAddress = await signer.getAddress();
     const tokenInfo = await getTokenInfo(tokenAddress);
     const tokenContract = getTokenContract(tokenAddress, signer);
@@ -173,15 +174,31 @@ export const approveToken = async (
     // Parse the amount to approve
     const amountToApprove = ethers.utils.parseUnits(amount, tokenInfo.decimals);
     
+    // Get current gas price from network
+    const gasPrice = await provider.getGasPrice();
+    // Increase gas price by 20% for potential replacement transactions
+    const increasedGasPrice = gasPrice.mul(120).div(100);
+    
+    logger.debug(`Using gas price: ${ethers.utils.formatUnits(increasedGasPrice, 'gwei')} gwei`);
+    
     // Some tokens require setting allowance to 0 first before changing it (to prevent potential exploits)
     if (currentAllowance.gt(0) && currentAllowance.lt(amountToApprove)) {
       logger.log("Resetting allowance to 0 first");
-      const resetTx = await tokenContract.approve(spenderAddress, 0);
+      const resetTx = await tokenContract.approve(spenderAddress, 0, {
+        gasLimit: 100000, // Set sufficient gas limit
+        gasPrice: increasedGasPrice // Use increased gas price
+      });
       await resetTx.wait(1); // Wait for 1 confirmation
     }
     
-    // Submit the approval transaction
-    return tokenContract.approve(spenderAddress, amountToApprove);
+    // Approval transaction options with increased gas price
+    const txOptions = {
+      gasLimit: 150000, // Reasonable gas limit for ERC20 approvals
+      gasPrice: increasedGasPrice
+    };
+    
+    // Submit the approval transaction with proper gas settings
+    return tokenContract.approve(spenderAddress, amountToApprove, txOptions);
   } catch (error) {
     logger.error("Error in approveToken:", error);
     throw new Error(`Failed to approve token: ${error instanceof Error ? error.message : String(error)}`);
