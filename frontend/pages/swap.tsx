@@ -385,6 +385,7 @@ const SwapPage = () => {
   }, [isConnected, address]);
   
   // Calculate output amount based on input
+  // 计算基于输入的输出数量
   const calculateOutputAmount = async (): Promise<void> => {
     try {
       if (!fromAmount || parseFloat(fromAmount) <= 0) {
@@ -393,7 +394,8 @@ const SwapPage = () => {
         return;
       }
 
-      // Set loading state
+      // Set loading state while calculation is in progress
+      // 设置加载状态表示计算正在进行中
       setToAmount('...');
 
       const fromTokenObj = tokens[fromToken];
@@ -404,41 +406,52 @@ const SwapPage = () => {
         return;
       }
 
+      // Check if the token pair has liquidity in the pool
+      // 检查代币对在流动池中是否有流动性
       if (!hasPairLiquidity(fromToken, toToken)) {
         console.error("No liquidity for this pair");
         setToAmount('0');
         return;
       }
 
-      // 修复：确保输入金额的小数位不超过代币精度
       // Fix: Ensure the input amount decimals don't exceed token precision
+      // 修复：确保输入金额的小数位不超过代币精度
       const amountValue = parseFloat(fromAmount);
       const formattedAmount = amountValue.toFixed(Math.min(fromTokenObj.decimals, 8));
       console.log(`Formatted input amount: ${formattedAmount} (original: ${fromAmount})`);
 
+      // Call getSwapQuote to calculate how many output tokens user will receive
+      // 调用getSwapQuote计算用户将收到多少输出代币
       const amountOut = await getSwapQuote(
         fromTokenObj.address,
         toTokenObj.address,
         formattedAmount
       );
 
-      // Format output with 4 decimal places
+      // Format output with 4 decimal places for better UI display
+      // 将输出格式化为4位小数，以便更好地在UI上显示
       const formattedOutput = parseFloat(amountOut).toFixed(4);
       setToAmount(formattedOutput);
 
       if (parseFloat(formattedOutput) > 0) {
+        // Calculate exchange rate: how many output tokens per 1 input token
+        // 计算汇率：每1个输入代币能兑换多少输出代币
         const rate = parseFloat(formattedOutput) / parseFloat(formattedAmount);
         
         setExchangeRate(rate.toFixed(4));
         
-        // Calculate price impact
+        // Calculate price impact: how much this trade affects the market price
+        // 计算价格影响：此交易对市场价格的影响程度
         const reserves = await getPairReserves(fromTokenObj.address, toTokenObj.address);
         
         if (reserves && reserves[0] && reserves[1]) {
-          // Simple price impact calculation
+          // Compare execution price with the current pool price to determine impact
+          // 将执行价格与当前池价格进行比较以确定影响
           const executionPrice = parseFloat(formattedOutput) / parseFloat(formattedAmount);
           const reservePrice = parseFloat(reserves[1]) / parseFloat(reserves[0]);
           
+          // Calculate impact as percentage difference between prices
+          // 计算影响为价格之间的百分比差异
           const impact = Math.abs(((executionPrice - reservePrice) / reservePrice) * 100);
           setPriceImpact(impact.toFixed(2));
         }
@@ -545,6 +558,7 @@ const SwapPage = () => {
   };
   
   // Handle swap button click
+  // 处理交换按钮点击
   const handleSwap = async (): Promise<void> => {
     if (!isConnected) {
       showNotification('error', st('walletWarning'));
@@ -564,13 +578,16 @@ const SwapPage = () => {
       const toTokenAddress = tokens[toToken].address;
       
       // Format the input amount to avoid decimal precision issues
+      // 格式化输入金额以避免小数精度问题
       const formattedAmount = parseFloat(fromAmount).toFixed(Math.min(tokens[fromToken].decimals, 8));
       
       // Calculate minimum output amount based on slippage
+      // 基于滑点计算最低输出数量
       const minOutputAmount = (parseFloat(toAmount) * (1 - slippage / 100)).toFixed(6);
       console.log(`Swapping ${formattedAmount} ${tokens[fromToken].symbol} for minimum ${minOutputAmount} ${tokens[toToken].symbol}...`);
       
-      // Execute swap
+      // Execute swap via smart contract
+      // 通过智能合约执行交换
       const tx = await executeSwap(
         fromTokenAddress,
         toTokenAddress,
@@ -580,19 +597,24 @@ const SwapPage = () => {
       
       console.log(`Swap transaction submitted: ${tx.hash}`);
       
-      // Wait for transaction to be mined
+      // Wait for transaction to be confirmed on blockchain
+      // 等待交易在区块链上确认
       const receipt = await tx.wait();
       console.log(`Swap confirmed in block ${receipt.blockNumber}`);
       
+      // Show success notification with swap details
+      // 显示包含交换详情的成功通知
       const successMessage = `${st('swapSuccess')}: ${fromAmount} ${tokens[fromToken].symbol} → ${toAmount} ${tokens[toToken].symbol}`;
       showNotification('success', successMessage);
       
-      // Reset form
+      // Reset form after successful swap
+      // 成功交换后重置表单
       setFromAmount('');
       setToAmount('');
       setShowExchangeInfo(false);
       
-      // Refresh balances after swap
+      // Refresh token balances after swap
+      // 交换后刷新代币余额
       const updatedTokens = { ...tokens };
       
       for (const [key, token] of Object.entries(tokens)) {
@@ -613,6 +635,7 @@ const SwapPage = () => {
       
       if (error instanceof Error) {
         // Check if it's an allowance error
+        // 检查是否是授权错误
         if (error.message.includes('allowance')) {
           errorMessage = `${st('swapError')}: Please approve the token first`;
         } else {
@@ -940,4 +963,4 @@ const SwapPageWithNoSSR = dynamic(() => Promise.resolve(SwapPage), {
   ssr: false 
 });
 
-export default SwapPageWithNoSSR; 
+export default SwapPageWithNoSSR;
