@@ -47,6 +47,12 @@ export interface LiquidityPosition {
   lpBalance: string;
   poolShare: number;
   pairAddress: string;
+  lpTokenAddress: string;
+  valueUSD?: string;
+  createdAt?: number;
+  tokenAName?: string;
+  tokenBName?: string;
+  apr?: number;
 }
 
 // Farm-related interfaces have been removed 

@@ -554,19 +554,36 @@ export const getUserLiquidityPositions = async (
     const positions: LiquidityPosition[] = [];
     
     // Process pairs in batches to avoid overloading the RPC
-    const batchSize = 5;
+    const batchSize = 3; // Reduce batch size to lower RPC load
     for (let i = 0; i < tokenPairs.length; i += batchSize) {
       const batch = tokenPairs.slice(i, i + batchSize);
       
-      // Process this batch in parallel
-      const batchResults = await Promise.all(
-        batch.map(async ([tokenA, tokenB]) => {
+      // Add a small delay between batches to avoid rate limiting
+      if (i > 0) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Process this batch with improved error handling
+      const batchPromises = batch.map(async ([tokenA, tokenB]) => {
+        // Track retry attempts
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        // Implement exponential backoff retry
+        const processPair = async (): Promise<LiquidityPosition | null> => {
           try {
             // Skip invalid addresses
             if (!tokenA || !tokenB || !ethers.utils.isAddress(tokenA) || !ethers.utils.isAddress(tokenB)) {
               return null;
             }
-        
+            
+            // Skip self-pairs
+            if (tokenA.toLowerCase() === tokenB.toLowerCase()) {
+              return null;
+            }
+            
+            logger.debug(`Checking pair ${tokenA}-${tokenB}`);
+            
             // Get pair address - try from factory first (more reliable)
             let pairAddress: string;
             try {
@@ -580,7 +597,7 @@ export const getUserLiquidityPositions = async (
             if (pairAddress === ethers.constants.AddressZero) {
               return null;
             }
-        
+            
             // Get LP token balance
             let lpBalance: ethers.BigNumber;
             try {
@@ -620,8 +637,63 @@ export const getUserLiquidityPositions = async (
             }
             
             // Get reserves and total supply
-            const [reserveA, reserveB] = await router.getReserves(pairAddress, tokenA, tokenB);
-            const totalSupply = await router.totalSupply(pairAddress);
+            // Wrap this in a separate try-catch to handle 502 errors specifically
+            let reserveA = ethers.BigNumber.from(0);
+            let reserveB = ethers.BigNumber.from(0);
+            let totalSupply = ethers.BigNumber.from(0);
+            
+            try {
+              [reserveA, reserveB] = await router.getReserves(pairAddress, tokenA, tokenB);
+              totalSupply = await router.totalSupply(pairAddress);
+            } catch (reserveError: any) {
+              logger.error(`Error getting reserves: ${reserveError.message}`, reserveError);
+              
+              // If we hit a 502 Bad Gateway, we'll make a fallback calculation
+              if (reserveError.message && 
+                  (reserveError.message.includes('502 Bad Gateway') || 
+                   reserveError.message.includes('CALL_EXCEPTION'))) {
+                logger.warn('Using fallback calculation for position due to RPC error');
+                
+                // Use a fallback calculation - assume 50/50 pool based on LP balance
+                // This is not accurate but better than failing completely
+                totalSupply = await getPairContract(pairAddress, provider).totalSupply().catch(() => ethers.BigNumber.from(0));
+                
+                // If we can't get total supply, use a fixed value for display
+                if (totalSupply.isZero()) {
+                  totalSupply = ethers.utils.parseEther("1000000"); // Arbitrary large number
+                }
+                
+                // Calculate pool share (fallback)
+                const poolShare = lpBalance.mul(ethers.BigNumber.from("10000")).div(totalSupply);
+                
+                // Get the LP token address
+                let lpTokenAddress = pairAddress;
+                try {
+                  lpTokenAddress = await router.getLPToken(pairAddress);
+                } catch (err: any) {
+                  logger.warn(`Couldn't get LP token address, using pair address: ${err.message}`);
+                }
+                
+                // Return fallback position with minimal information
+                return {
+                  tokenA,
+                  tokenB,
+                  tokenASymbol: token0Symbol || tokenAInfo.symbol,
+                  tokenBSymbol: token1Symbol || tokenBInfo.symbol,
+                  tokenAAmount: "0", // We don't know the exact amount
+                  tokenBAmount: "0", // We don't know the exact amount
+                  lpBalance: ethers.utils.formatUnits(lpBalance, 18),
+                  poolShare: poolShare.toNumber() / 100,
+                  pairAddress,
+                  lpTokenAddress,
+                  valueUSD: "0",
+                  createdAt: Math.floor(Date.now() / 1000)
+                };
+              }
+              
+              // For other errors, throw to retry
+              throw reserveError;
+            }
         
             // Skip if total supply is zero (shouldn't happen but just in case)
             if (totalSupply.isZero()) {
@@ -639,7 +711,12 @@ export const getUserLiquidityPositions = async (
             const valueUSD = 0; // This would need to be calculated with price data
         
             // Get the actual LP token address from the router
-            const lpTokenAddress = await router.getLPToken(pairAddress);
+            let lpTokenAddress = pairAddress;
+            try {
+              lpTokenAddress = await router.getLPToken(pairAddress).catch(() => pairAddress);
+            } catch (err: any) {
+              logger.warn(`Couldn't get LP token address, using pair address: ${err.message}`);
+            }
         
             return {
               tokenA,
@@ -651,19 +728,42 @@ export const getUserLiquidityPositions = async (
               lpBalance: ethers.utils.formatUnits(lpBalance, 18),
               poolShare: poolShare.toNumber() / 100,
               pairAddress,
-              lpTokenAddress, // Using the correct LP token address from the router
-              valueUSD: valueUSD.toString(),
+              lpTokenAddress,
+              valueUSD: "0",
               createdAt: Math.floor(Date.now() / 1000)
             };
-          } catch (error) {
-            logger.error(`Error processing pair ${tokenA}-${tokenB}:`, error);
-            return null;
+          } catch (error: any) {
+            if (retryCount < maxRetries) {
+              // Exponential backoff
+              const delay = Math.pow(2, retryCount) * 1000;
+              logger.warn(`Retrying pair ${tokenA}-${tokenB} after ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+              retryCount++;
+              await new Promise(resolve => setTimeout(resolve, delay));
+              return processPair(); // Recursive retry
+            }
+            
+            logger.error(`Error processing pair ${tokenA}-${tokenB} after ${maxRetries} attempts:`, error);
+            return null; // Return null after max retries
           }
-        })
-      );
+        };
+        
+        return processPair();
+      });
       
-      // Add valid positions from this batch
-      positions.push(...batchResults.filter(Boolean) as LiquidityPosition[]);
+      try {
+        // Process batch with Promise.allSettled to handle partial failures
+        const batchResults = await Promise.allSettled(batchPromises);
+        
+        // Filter successful results and add to positions
+        batchResults.forEach(result => {
+          if (result.status === 'fulfilled' && result.value) {
+            positions.push(result.value);
+          }
+        });
+      } catch (batchError) {
+        logger.error(`Error processing batch ${i}-${i+batchSize}:`, batchError);
+        // Continue with next batch even if this one failed
+      }
     }
     
     logger.log(`Found ${positions.length} positions in total`);
