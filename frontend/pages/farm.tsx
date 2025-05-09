@@ -555,9 +555,9 @@ const FarmPage = () => {
   const fetchPoolsData = async () => {
     if (!FARM_ADDRESS || !ethers.utils.isAddress(FARM_ADDRESS)) {
       console.error("Invalid farm address");
-      return;
-    }
-
+        return;
+      }
+      
     setIsLoadingPools(true);
     
     try {
@@ -981,7 +981,7 @@ const FarmPage = () => {
       
       let allocPointValue = 0;
       if (result.isInFarm && typeof result.poolId === 'number') {
-        const poolInfo = await getPoolInfo(provider, result.poolId);
+          const poolInfo = await getPoolInfo(provider, result.poolId);
         allocPointValue = poolInfo ? poolInfo.allocPoint : 0;
       }
       
@@ -1535,7 +1535,7 @@ const FarmPage = () => {
     const share = calculateEstimatedRewardShare(points, totalPoints);
     setEstimatedRewardShare(share);
   };
-
+  
   // Main render function
   // 主渲染函数
   return (

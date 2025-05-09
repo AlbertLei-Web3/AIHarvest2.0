@@ -132,11 +132,24 @@ export const getSwapQuote = async (
       toTokenAddress
     );
 
-    // Calculate output amount
-    const amountInWei = ethers.utils.parseUnits(amountIn, fromTokenInfo.decimals);
-    const amountOut = await router.getAmountOut(amountInWei, reserveA, reserveB);
-    
-    return ethers.utils.formatUnits(amountOut, toTokenInfo.decimals);
+    // 修复: 确保输入金额不超过代币精度，避免BigNumber错误
+    // Fix: Ensure input amount doesn't exceed token decimals to avoid BigNumber errors
+    try {
+      // Step 1: Parse the input as a number to handle scientific notation
+      const amountValue = parseFloat(amountIn);
+      
+      // Step 2: Format with exactly the number of decimals the token supports
+      const safeAmountIn = amountValue.toFixed(fromTokenInfo.decimals);
+      
+      // Step 3: Convert to BigNumber
+      const amountInWei = ethers.utils.parseUnits(safeAmountIn, fromTokenInfo.decimals);
+      const amountOut = await router.getAmountOut(amountInWei, reserveA, reserveB);
+      
+      return ethers.utils.formatUnits(amountOut, toTokenInfo.decimals);
+    } catch (parseError: any) {
+      logger.error(`Error parsing amount "${amountIn}" to BigNumber:`, parseError);
+      throw new Error(`Invalid amount format: ${parseError.message}`);
+    }
   } catch (error) {
     logger.error("Error getting swap quote:", error);
     return "0";

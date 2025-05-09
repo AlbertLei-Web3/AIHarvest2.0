@@ -39,7 +39,7 @@ export default function useTokens() {
       setErrors(prev => ({ ...prev, [`info_${tokenAddress}`]: 'Invalid token address' }));
       return null;
     }
-    
+
     // Check cache first
     if (tokenInfoCache[tokenAddress]) {
       return tokenInfoCache[tokenAddress];

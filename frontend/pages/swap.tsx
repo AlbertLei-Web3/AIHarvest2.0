@@ -410,18 +410,24 @@ const SwapPage = () => {
         return;
       }
 
+      // 修复：确保输入金额的小数位不超过代币精度
+      // Fix: Ensure the input amount decimals don't exceed token precision
+      const amountValue = parseFloat(fromAmount);
+      const formattedAmount = amountValue.toFixed(Math.min(fromTokenObj.decimals, 8));
+      console.log(`Formatted input amount: ${formattedAmount} (original: ${fromAmount})`);
+
       const amountOut = await getSwapQuote(
         fromTokenObj.address,
         toTokenObj.address,
-        ethers.utils.parseUnits(fromAmount, fromTokenObj.decimals)
+        formattedAmount
       );
 
       // Format output with 4 decimal places
-      const formattedAmount = ethers.utils.formatUnits(amountOut, toTokenObj.decimals);
-      setToAmount(formatTokenAmount(formattedAmount));
+      const formattedOutput = parseFloat(amountOut).toFixed(4);
+      setToAmount(formattedOutput);
 
-      if (parseFloat(formattedAmount) > 0) {
-        const rate = parseFloat(formattedAmount) / parseFloat(fromAmount);
+      if (parseFloat(formattedOutput) > 0) {
+        const rate = parseFloat(formattedOutput) / parseFloat(formattedAmount);
         
         setExchangeRate(rate.toFixed(4));
         
@@ -430,7 +436,7 @@ const SwapPage = () => {
         
         if (reserves && reserves[0] && reserves[1]) {
           // Simple price impact calculation
-          const executionPrice = parseFloat(formattedAmount) / parseFloat(fromAmount);
+          const executionPrice = parseFloat(formattedOutput) / parseFloat(formattedAmount);
           const reservePrice = parseFloat(reserves[1]) / parseFloat(reserves[0]);
           
           const impact = Math.abs(((executionPrice - reservePrice) / reservePrice) * 100);
@@ -438,7 +444,7 @@ const SwapPage = () => {
         }
       }
       
-      setShowExchangeInfo(Boolean(parseFloat(formattedAmount) > 0));
+      setShowExchangeInfo(Boolean(parseFloat(formattedOutput) > 0));
     } catch (error) {
       console.error("Error calculating swap output:", error);
       setToAmount('0');
@@ -557,15 +563,18 @@ const SwapPage = () => {
       const fromTokenAddress = tokens[fromToken].address;
       const toTokenAddress = tokens[toToken].address;
       
+      // Format the input amount to avoid decimal precision issues
+      const formattedAmount = parseFloat(fromAmount).toFixed(Math.min(tokens[fromToken].decimals, 8));
+      
       // Calculate minimum output amount based on slippage
       const minOutputAmount = (parseFloat(toAmount) * (1 - slippage / 100)).toFixed(6);
-      console.log(`Swapping ${fromAmount} ${tokens[fromToken].symbol} for minimum ${minOutputAmount} ${tokens[toToken].symbol}...`);
+      console.log(`Swapping ${formattedAmount} ${tokens[fromToken].symbol} for minimum ${minOutputAmount} ${tokens[toToken].symbol}...`);
       
       // Execute swap
       const tx = await executeSwap(
         fromTokenAddress,
         toTokenAddress,
-        fromAmount,
+        formattedAmount,
         minOutputAmount
       );
       
