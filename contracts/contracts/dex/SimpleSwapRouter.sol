@@ -574,6 +574,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         require(amountIn > 0, "INSUFFICIENT_INPUT_AMOUNT");
         require(reserveIn > 0 && reserveOut > 0, "INSUFFICIENT_LIQUIDITY");
         
+        // 【精华】恒定乘积公式实现：确保交易后 k = reserveIn * reserveOut 保持恒定
+        // 【Essential Highlight】Constant product formula implementation: Ensures k = reserveIn * reserveOut remains constant after trade
         uint256 amountInWithFee = amountIn * (FEE_DENOMINATOR - swapFee);
         uint256 numerator = amountInWithFee * reserveOut;
         uint256 denominator = (reserveIn * FEE_DENOMINATOR) + amountInWithFee;
@@ -685,7 +687,8 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
         
         // Check if this is the first liquidity provision
         if (lpCurrentSupply == 0) {
-            // Initial liquidity provision - calculate using the amounts being added
+            // 【精华】初始流动性基于恒定乘积公式 sqrt(amountA * amountB)
+            // 【Essential Highlight】Initial liquidity based on constant product formula sqrt(amountA * amountB)
             uint256 initialLiquidity = sqrt(amountA * amountB);
             
             // Ensure we have enough initial liquidity
@@ -693,15 +696,13 @@ contract SimpleSwapRouter is Ownable, ReentrancyGuard {
             
             // 【精华】从用户获得的LP代币中扣除MINIMUM_LIQUIDITY数量，这部分永久锁定在合约中
             // 【Essential Highlight】Subtracts MINIMUM_LIQUIDITY from LP tokens given to user, permanently locking this amount in the contract
-            // IMPORTANT: For example, if a user provides 4321 TokenA and 4321 TokenB, 
-            // the total LP tokens would be sqrt(4321*4321) = 4321, but the user receives
-            // 4321 - 1000 = 3321 LP tokens. The remaining 1000 are permanently locked.
             liquidity = initialLiquidity - MINIMUM_LIQUIDITY;
             
             // Mint minimum liquidity to this contract address (permanently locked)
             PairERC20(lpToken).mint(address(this), MINIMUM_LIQUIDITY);
         } else {
-            // Calculate based on the proportion of existing supply
+            // 【精华】现有流动性下，LP代币计算基于当前流动性和资产比例
+            // 【Essential Highlight】With existing liquidity, LP tokens calculated based on current liquidity and asset ratio
             uint256 liquidityA = (amountA * lpCurrentSupply) / reserveA;
             uint256 liquidityB = (amountB * lpCurrentSupply) / reserveB;
             liquidity = liquidityA < liquidityB ? liquidityA : liquidityB;

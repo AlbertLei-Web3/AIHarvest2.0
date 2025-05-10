@@ -120,7 +120,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         
         uint256 lastRewardTime = block.timestamp > startTime ? block.timestamp : startTime;
         
-        // Update total allocation points
+        // 【精华】管理员设置池子权重：通过更新总分配点数，影响全局奖励分配比例
+        // 【Essential Highlight】Admin sets pool weight: By updating total allocation points, affects global reward distribution ratio
         totalAllocPoint += _allocPoint;
         
         // 添加新池子，无需检查LP代币的factory
@@ -147,7 +148,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         
         uint256 oldAllocPoint = poolInfo[_pid].allocPoint;
         
-        // Update allocation points
+        // 【精华】动态调整池子权重：从旧的分配点中减去，然后添加新的分配点
+        // 【Essential Highlight】Dynamically adjust pool weight: Subtract from old allocation points, then add new allocation points
         totalAllocPoint = totalAllocPoint - oldAllocPoint + _allocPoint;
         poolInfo[_pid].allocPoint = _allocPoint;
         
@@ -159,6 +161,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
      * @param _aihPerSecond AIH tokens per second
      */
     function setAIHPerSecond(uint256 _aihPerSecond) external onlyOwner {
+        // 【精华】管理员可调整全局奖励速率，影响所有池子的收益
+        // 【Essential Highlight】Admin can adjust global reward rate, affecting earnings for all pools
         massUpdatePools();
         uint256 oldRate = aihPerSecond;
         aihPerSecond = _aihPerSecond;
@@ -184,6 +188,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         // 【Essential Highlight】Time-based precise reward calculation, dynamically calculated based on elapsed time, pool weight, and total staked amount
         if (block.timestamp > pool.lastRewardTime && lpSupply != 0 && totalAllocPoint > 0) {
             uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
+            // 【精华】奖励计算公式：池子的分配点数占总分配点数的比例，决定了池子能获得的奖励份额
+            // 【Essential Highlight】Reward calculation formula: The pool's allocation points as a proportion of total allocation points determines the pool's reward share
             uint256 aihReward = (timeElapsed * aihPerSecond * pool.allocPoint) / totalAllocPoint;
             accAIHPerShare += (aihReward * PRECISION_FACTOR) / lpSupply;
         }
@@ -222,6 +228,8 @@ contract SimpleFarm is Ownable, ReentrancyGuard {
         }
         
         uint256 timeElapsed = block.timestamp - pool.lastRewardTime;
+        // 【精华】实际奖励铸造：基于时间和权重比例计算应铸造的奖励数量
+        // 【Essential Highlight】Actual reward minting: Calculate rewards to be minted based on time and weight ratio
         uint256 aihReward = (timeElapsed * aihPerSecond * pool.allocPoint) / totalAllocPoint;
         
         // Mint AIH rewards

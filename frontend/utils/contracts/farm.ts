@@ -404,7 +404,8 @@ export const getPoolAPR = async (
     // Get pool info using the getPoolInfo function
     const poolInfo = await farmContract.getPoolInfo(poolId);
     
-    // 尝试获取totalAllocPoint - 使用更可靠的方法
+    // 【精华】获取totalAllocPoint - 所有池子分配点数的总和，决定每个池子的奖励比例
+    // 【Essential Highlight】Get totalAllocPoint - sum of all pool allocation points, determines each pool's reward proportion
     let totalAllocPoint;
     let usedDefaultValue = false;
     
@@ -437,7 +438,8 @@ export const getPoolAPR = async (
       console.log(`Pool ${poolId}: 使用估计的totalAllocPoint值:`, totalAllocPoint.toString());
     }
     
-    // 获取每秒分配的AIH代币数量
+    // 【精华】获取每秒分配的AIH代币数量，全局奖励速率
+    // 【Essential Highlight】Get AIH tokens allocated per second, global reward rate
     let aihPerSecond;
     try {
       aihPerSecond = await farmContract.aihPerSecond();
@@ -457,8 +459,8 @@ export const getPoolAPR = async (
       return 0;
     }
     
-    // Calculate AIH rewards per year for this pool
-    // 计算这个池子每年的AIH奖励
+    // 【精华】计算池子年度奖励：基于池子权重占比和全局奖励率
+    // 【Essential Highlight】Calculate pool's annual rewards: Based on pool weight proportion and global reward rate
     const aihPerYear = aihPerSecond.mul(3600 * 24 * 365);
     const poolRewardsPerYear = aihPerYear.mul(poolInfo.allocPoint).div(totalAllocPoint);
     
@@ -471,7 +473,8 @@ export const getPoolAPR = async (
       return 0;
     }
     
-    // 使用模拟的价格数据计算APR
+    // 【精华】使用模拟的价格数据计算APR - 将代币价格考虑在内
+    // 【Essential Highlight】Calculate APR using simulated price data - taking token prices into account
     try {
       console.log(`Pool ${poolId}: 使用以下LP代币详情计算价格:`, lpTokenDetails);
       
@@ -535,7 +538,8 @@ export const getPoolAPR = async (
         lpTokenPrice = 2.5; // Default price for simulation
       }
       
-      // Calculate total staked value
+      // 【精华】计算APR：年度奖励价值除以总质押价值乘以100%
+      // 【Essential Highlight】Calculate APR: Annual reward value divided by total staked value multiplied by 100%
       const totalStakedLP = parseFloat(ethers.utils.formatEther(poolInfo.totalStaked));
       const totalStakedValue = totalStakedLP * lpTokenPrice;
       console.log(`Pool ${poolId}: 总质押价值: ${totalStakedLP} LP = $${totalStakedValue}`);
